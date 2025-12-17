@@ -1,5 +1,7 @@
 use derive_more::Into;
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
+use serde::Deserialize;
+use serde::de::Visitor;
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -44,21 +46,6 @@ pub enum Instance {
 const ID_MASK: u64 = 0xFFFFFFFF;
 const INSTANCE_MASK: u64 = 0x000FFFFF;
 const TYPE_MASK: u64 = 0x0000000F;
-
-// #[derive(PartialEq, Debug, From)]
-// pub enum ParseSteamIDError {
-//     ParseIntError(ParseIntError),
-//     ConvertSteamIDError(ConvertSteamIDError),
-// }
-
-// #[derive(PartialEq, Debug, From)]
-// pub enum ConvertSteamIDError {
-//     AccountIDIsZero,
-//     NonAllInstanceInClanID,
-//     InvalidUniverseError(TryFromPrimitiveError<Universe>),
-//     InvalidTypeError(TryFromPrimitiveError<Type>),
-//     InvalidInstanceError(TryFromPrimitiveError<Instance>),
-// }
 
 #[derive(Error, Debug)]
 pub enum ParseSteamIDError {
@@ -160,9 +147,39 @@ impl TryFrom<u64> for SteamID {
     }
 }
 
-#[derive(PartialEq, Debug)]
+struct SteamIDVisitor;
+
+impl<'de> Visitor<'de> for SteamIDVisitor {
+    type Value = SteamID;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a valid 64-bit steam id")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        v.parse::<SteamID>()
+            .map_err(|err| E::custom(format!("error parsing SteamID from value: {}", err)))
+    }
+}
+
+impl<'de> Deserialize<'de> for SteamID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(SteamIDVisitor)
+    }
+}
+
+#[derive(Error, Debug)]
 pub enum ConvertPlayerSteamIDError {
+    #[error("the ID's Universe must be set as Public")]
     UniverseIsNotPublic,
+
+    #[error("the ID's Type must be set as Individual")]
     TypeIsNotIndividual,
 }
 
@@ -197,6 +214,41 @@ impl TryFrom<SteamID> for PlayerSteamID {
         } else {
             Ok(PlayerSteamID { steam_id: id })
         }
+    }
+}
+
+struct PlayerSteamIDVisitor;
+
+impl<'de> Visitor<'de> for PlayerSteamIDVisitor {
+    type Value = PlayerSteamID;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a valid 64-bit public individual steam id")
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        let steam_id = v
+            .parse::<SteamID>()
+            .map_err(|err| E::custom(format!("error parsing SteamID from value: {}", err)))?;
+
+        PlayerSteamID::try_from(steam_id).map_err(|err| {
+            E::custom(format!(
+                "error creating PlayerSteamID from SteamID: {}",
+                err
+            ))
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for PlayerSteamID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(PlayerSteamIDVisitor)
     }
 }
 
