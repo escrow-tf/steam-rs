@@ -1,6 +1,6 @@
 use derive_more::Into;
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde::de::Visitor;
 use std::convert::TryFrom;
 use std::fmt::Display;
@@ -74,7 +74,6 @@ pub enum ConvertSteamIDError {
     InstanceOutOfRange(#[from] TryFromPrimitiveError<Instance>),
 }
 
-/// # SteamID
 /// A valid 64-bit Steam ID. There are several invariants, see [ParseSteamIDError].
 ///
 /// Parse from a string:
@@ -174,6 +173,14 @@ impl<'de> Deserialize<'de> for SteamID {
     }
 }
 
+impl Serialize for SteamID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        serializer.serialize_str(self.to_string().as_str())
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum ConvertPlayerSteamIDError {
     #[error("the ID's Universe must be set as Public")]
@@ -249,6 +256,14 @@ impl<'de> Deserialize<'de> for PlayerSteamID {
         D: serde::Deserializer<'de>,
     {
         deserializer.deserialize_str(PlayerSteamIDVisitor)
+    }
+}
+
+impl Serialize for PlayerSteamID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer {
+        serializer.serialize_str(self.steam_id.to_string().as_str())
     }
 }
 
