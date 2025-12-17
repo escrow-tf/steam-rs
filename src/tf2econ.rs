@@ -1,3 +1,4 @@
+use derive_more::From;
 use serde::Deserialize;
 use type_state_builder::TypeStateBuilder;
 
@@ -13,10 +14,52 @@ pub struct PlayerItemsRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct PlayerItemsResult {
-    status: i32,
-    status_detail: String,
-    num_backpack_slots: i32,
+    pub status: i32,
+    pub status_detail: String,
+    pub num_backpack_slots: i32,
+    pub items: Vec<Item>,
     // TODO: items,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Item {
+    pub id: i32,
+    pub original_id: i32,
+    pub def_index: i32,
+    pub level: i32,
+    pub quality: i32,
+    pub inventory: i64,
+    pub quantity: i32,
+    pub origin: i32,
+    pub cannot_trade: bool,
+    pub style: i32,
+    pub cannot_craft: bool,
+    pub custom_name: Option<String>,
+
+    #[serde(rename = "custom_desc")]
+    pub custom_description: Option<String>,
+    pub attributes: Vec<Attribute>,
+    pub equipped: Vec<EquipInfo>,
+}
+
+#[derive(Debug, Deserialize, From)]
+pub enum AttributeValue {
+    Int(i64),
+    String(String),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Attribute {
+    #[serde(rename = "defindex")]
+    pub def_index: i32,
+    pub value: AttributeValue,
+    pub float_value: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct EquipInfo {
+    pub class: i32,
+    pub slot: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -37,19 +80,4 @@ impl<'a> From<PlayerItemsRequest> for PublicTransportRequest<'a, PlayerItemsResp
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{
-        tf2econ::PlayerItemsRequest,
-        transport::{PublicTransport, PublicTransportRequest},
-    };
-
-    async fn do_transport_request() {
-        let request = PlayerItemsRequest {
-            steam_id: "76561197960287930".parse().unwrap(),
-        };
-        let request: PublicTransportRequest<_> = request.into();
-
-        let transport = PublicTransport::new("").unwrap();
-        _ = transport.send(request).await.unwrap();
-    }
-}
+mod tests {}
