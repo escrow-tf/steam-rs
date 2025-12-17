@@ -35,6 +35,8 @@ use url::ParseError;
 
 use crate::steamlang;
 
+const WEB_API_BASE_URL: &str = "https://api.steampowered.com";
+
 #[derive(Clone)]
 pub struct PublicTransport {
     client: Client,
@@ -54,7 +56,7 @@ pub struct PublicTransportRequest<'a, R: DeserializeOwned> {
     #[builder(required)]
     params: Vec<(String, String)>,
 
-    #[builder(required)]
+    #[builder(default = WEB_API_BASE_URL)]
     base_url: &'a str,
 
     #[builder(required)]
