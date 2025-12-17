@@ -15,9 +15,9 @@ pub struct PlayerItemsRequest {
 #[derive(Debug, Deserialize)]
 pub struct PlayerItemsResult {
     pub status: i32,
-    pub status_detail: String,
-    pub num_backpack_slots: i32,
-    pub items: Vec<Item>,
+    pub status_detail: Option<String>,
+    pub num_backpack_slots: Option<i32>,
+    pub items: Option<Vec<Item>>,
     // TODO: items,
 }
 
@@ -31,15 +31,22 @@ pub struct Item {
     pub inventory: i64,
     pub quantity: i32,
     pub origin: i32,
+
+    #[serde(default)]
     pub cannot_trade: bool,
+
+    #[serde(default)]
     pub style: i32,
+
+    #[serde(default)]
     pub cannot_craft: bool,
+
     pub custom_name: Option<String>,
 
     #[serde(rename = "custom_desc")]
     pub custom_description: Option<String>,
-    pub attributes: Vec<Attribute>,
-    pub equipped: Vec<EquipInfo>,
+    pub attributes: Option<Vec<Attribute>>,
+    pub equipped: Option<Vec<EquipInfo>>,
 }
 
 #[derive(Debug, Deserialize, From)]
