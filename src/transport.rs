@@ -20,6 +20,8 @@ the transport handles requests over HTTP. There are three kinds of transports:
 
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
+use base64::{Engine, prelude::BASE64_STANDARD};
+use derive_more::From;
 use reqwest::{
     Client, Method, Request, Url,
     cookie::Jar,
@@ -159,20 +161,78 @@ pub struct PrivateTransport {
     retry_client: ClientWithMiddleware,
 }
 
-#[derive(Debug)]
-pub enum TransportBody {
-    Empty,
-    FormValues(HashMap<String, String>),
-    MultipartValues(HashMap<String, String>),
+pub trait TransportBody {
+    fn transform(
+        &self,
+        request: reqwest_middleware::RequestBuilder,
+    ) -> reqwest_middleware::RequestBuilder;
+}
+
+#[derive(Default)]
+pub struct EmptyBody;
+
+impl TransportBody for EmptyBody {
+    fn transform(
+        &self,
+        request: reqwest_middleware::RequestBuilder,
+    ) -> reqwest_middleware::RequestBuilder {
+        request
+    }
+}
+
+pub struct FormBody(HashMap<String, String>);
+
+impl TransportBody for FormBody {
+    fn transform(
+        &self,
+        request: reqwest_middleware::RequestBuilder,
+    ) -> reqwest_middleware::RequestBuilder {
+        request.form(&self.0)
+    }
+}
+
+pub struct MultipartBody(HashMap<String, String>);
+
+impl TransportBody for MultipartBody {
+    fn transform(
+        &self,
+        request: reqwest_middleware::RequestBuilder,
+    ) -> reqwest_middleware::RequestBuilder {
+        let form = self
+            .0
+            .iter()
+            .fold(multipart::Form::new(), |form, (param, value)| {
+                form.text(param.clone(), value.clone())
+            });
+
+        request.multipart(form)
+    }
+}
+
+#[derive(From)]
+pub struct EncodedProtobufBody<T: prost::Message>(T);
+
+impl<T: prost::Message> TransportBody for EncodedProtobufBody<T> {
+    fn transform(
+        &self,
+        request: reqwest_middleware::RequestBuilder,
+    ) -> reqwest_middleware::RequestBuilder {
+        let bytes = self.0.encode_to_vec();
+        let encoded = BASE64_STANDARD.encode(bytes);
+
+        let form = multipart::Form::new().text("input_protobuf_encoded", encoded);
+
+        request.multipart(form)
+    }
 }
 
 #[derive(Debug, TypeStateBuilder)]
-pub struct PrivateTransportRequest<'a, R: prost::Message + Default> {
+pub struct PrivateTransportRequest<'a, B: TransportBody, R: prost::Message + Default> {
     // TODO: cache_ttl
     #[builder(default = false)]
     can_retry: bool,
 
-    #[builder(required)]
+    #[builder(default = WEB_API_BASE_URL)]
     base_url: &'a str,
 
     #[builder(required)]
@@ -184,8 +244,9 @@ pub struct PrivateTransportRequest<'a, R: prost::Message + Default> {
     #[builder(default = Method::POST)]
     method: Method,
 
-    #[builder(default = TransportBody::Empty)]
-    body: TransportBody,
+    #[builder(required)]
+    body: B,
+
     // TODO: do I need a Content Type?
     #[builder(default = HeaderMap::default())]
     headers: HeaderMap,
@@ -217,9 +278,9 @@ impl PrivateTransport {
         })
     }
 
-    pub async fn send<'a, R: prost::Message + Default>(
+    pub async fn send<'a, B: TransportBody, R: prost::Message + Default>(
         &self,
-        request: PrivateTransportRequest<'a, R>,
+        request: PrivateTransportRequest<'a, B, R>,
     ) -> Result<R, SendError> {
         let mut url = Url::try_from(request.base_url)?;
         url.set_path(request.path);
@@ -240,19 +301,7 @@ impl PrivateTransport {
 
         let mut http_request = http_client.request(request.method, url).headers(headers);
 
-        http_request = match &request.body {
-            TransportBody::FormValues(values) => http_request.form(values),
-            TransportBody::MultipartValues(values) => {
-                let form = values
-                    .iter()
-                    .fold(multipart::Form::new(), |form, (param, value)| {
-                        form.text(param.clone(), value.clone())
-                    });
-
-                http_request.multipart(form)
-            }
-            TransportBody::Empty => http_request,
-        };
+        http_request = request.body.transform(http_request);
 
         let response = http_request.send().await?;
         let response = response.bytes().await?;
