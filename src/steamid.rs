@@ -1,7 +1,7 @@
 use derive_more::Into;
 use num_enum::{TryFromPrimitive, TryFromPrimitiveError};
-use serde::{Deserialize, Serialize};
 use serde::de::Visitor;
+use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -176,7 +176,8 @@ impl<'de> Deserialize<'de> for SteamID {
 impl Serialize for SteamID {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         serializer.serialize_str(self.to_string().as_str())
     }
 }
@@ -262,7 +263,8 @@ impl<'de> Deserialize<'de> for PlayerSteamID {
 impl Serialize for PlayerSteamID {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         serializer.serialize_str(self.steam_id.to_string().as_str())
     }
 }
