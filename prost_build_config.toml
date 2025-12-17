@@ -1,0 +1,29 @@
+
+default_package_filename = "steamproto"
+includes = ["src/protobufs/steam"] 
+base_path = "src/protobufs/steam"
+files = [
+    "steammessages_twofactor.steamclient.proto",
+    "steammessages_auth.steamclient.proto",
+    "steammessages_unified_base.steamclient.proto",
+    "steammessages_base.proto",
+    "enums.proto",
+]
+btree_map = []
+bytes = []
+
+[[messages]]
+paths = []
+attrs = [
+  "derive(serde::Serialize, serde::Deserialize, validator::Validate)",
+  "serde(default)"
+]
+
+[[enums]]
+paths = []
+attrs = [
+  "derive(serde::Serialize, serde::Deserialize, validator::Validate)",
+  "serde(rename_all = \"lowercase\")"
+]
+
+[[fields]]
