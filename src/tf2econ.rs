@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use derive_more::From;
 use serde::Deserialize;
 use type_state_builder::TypeStateBuilder;
@@ -67,10 +69,12 @@ pub struct PlayerItemsResponse {
 
 impl<'a> From<PlayerItemsRequest> for PublicTransportRequest<'a, PlayerItemsResponse> {
     fn from(request: PlayerItemsRequest) -> Self {
+        let params = HashMap::from([("steamid".to_string(), request.steam_id.to_string())]);
+
         PublicTransportRequest::builder()
             .can_retry(true)
             .requires_api_key(true)
-            .params(vec![("steamid".to_string(), request.steam_id.to_string())])
+            .params(params)
             .path("/IEconItems_440/GetPlayerItems/v1/")
             .build()
     }

@@ -53,8 +53,8 @@ pub struct PublicTransportRequest<'a, R: DeserializeOwned> {
     #[builder(default = false)]
     requires_api_key: bool,
 
-    #[builder(required)]
-    params: Vec<(String, String)>,
+    #[builder(default = HashMap::new())]
+    params: HashMap<String, String>,
 
     #[builder(default = WEB_API_BASE_URL)]
     base_url: &'a str,
@@ -178,8 +178,8 @@ pub struct PrivateTransportRequest<'a, R: prost::Message + Default> {
     #[builder(required)]
     path: &'a str,
 
-    #[builder(default = Vec::default())]
-    params: Vec<(String, String)>,
+    #[builder(default = HashMap::new())]
+    params: HashMap<String, String>,
 
     #[builder(default = Method::POST)]
     method: Method,
