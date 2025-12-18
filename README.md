@@ -10,5 +10,5 @@ This library implements:
 - [x] Retrieving Econ Inventories
 - [x] Retrieving TF2 Player Inventories
 - [ ] Authenticating with Steam (Steam Guard only)
-- [/] Trade Offer Operations (GetOffer, GetOffers, Create, Accept, Decline, Cancel)
-- [/] Mobile Confirmations
+- [ ] Trade Offer Operations (GetOffer, GetOffers, Create, Accept, Decline, Cancel)
+- [ ] Mobile Confirmations
