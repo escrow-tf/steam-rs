@@ -23,7 +23,10 @@ use std::{collections::HashMap, marker::PhantomData, str::Utf8Error, sync::Arc};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use derive_more::From;
 use reqwest::{
-    Client, Method, Request, Response, Url, cookie::Jar, header::{ACCEPT, HeaderMap, USER_AGENT}, multipart
+    Client, Method, Request, Response, Url,
+    cookie::Jar,
+    header::{ACCEPT, HeaderMap, USER_AGENT},
+    multipart,
 };
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
@@ -121,10 +124,7 @@ impl PublicTransport {
     /// ## Errors
     ///
     /// See [SendError].
-    pub async fn send<'a, R: DeserializeOwned>(
-        &self,
-        request: PublicTransportRequest<'a, R>,
-    ) -> Result<R, SendError> {
+    pub async fn send<'a, R: DeserializeOwned>(&self, request: PublicTransportRequest<'a, R>) -> Result<R, SendError> {
         let mut url = Url::try_from(request.base_url)?;
         url.set_path(request.path);
 
@@ -183,20 +183,14 @@ impl std::fmt::Debug for TransportBody1 {
 }
 
 pub trait TransportBody {
-    fn transform(
-        &self,
-        request: reqwest_middleware::RequestBuilder,
-    ) -> reqwest_middleware::RequestBuilder;
+    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder;
 }
 
 #[derive(Default)]
 pub struct EmptyBody;
 
 impl TransportBody for EmptyBody {
-    fn transform(
-        &self,
-        request: reqwest_middleware::RequestBuilder,
-    ) -> reqwest_middleware::RequestBuilder {
+    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder {
         request
     }
 }
@@ -205,10 +199,7 @@ impl TransportBody for EmptyBody {
 pub struct UrlEncodedBody<T: Serialize + Sized>(T);
 
 impl<T: Serialize + Sized> TransportBody for UrlEncodedBody<T> {
-    fn transform(
-        &self,
-        request: reqwest_middleware::RequestBuilder,
-    ) -> reqwest_middleware::RequestBuilder {
+    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder {
         request.form(&self.0)
     }
 }
@@ -217,10 +208,7 @@ impl<T: Serialize + Sized> TransportBody for UrlEncodedBody<T> {
 pub struct EncodedProtobufBody<T: prost::Message>(T);
 
 impl<T: prost::Message> TransportBody for EncodedProtobufBody<T> {
-    fn transform(
-        &self,
-        request: reqwest_middleware::RequestBuilder,
-    ) -> reqwest_middleware::RequestBuilder {
+    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder {
         let bytes = self.0.encode_to_vec();
         let encoded = BASE64_STANDARD.encode(bytes);
 
@@ -303,9 +291,7 @@ impl PrivateTransport {
         headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
         headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
 
-        let mut http_request = http_client
-            .request(request.method, url)
-            .headers(headers);
+        let mut http_request = http_client.request(request.method, url).headers(headers);
 
         http_request = request.body.transform(http_request);
 

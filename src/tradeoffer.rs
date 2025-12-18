@@ -21,9 +21,7 @@ pub struct ActionResponse {
     pub trade_offer_id: OfferId,
 }
 
-impl<'a> From<AcceptOfferRequest>
-    for PrivateTransportRequest<'a, UrlEncodedBody<AcceptOfferRequest>, ActionResponse>
-{
+impl<'a> From<AcceptOfferRequest> for PrivateTransportRequest<'a, UrlEncodedBody<AcceptOfferRequest>, ActionResponse> {
     fn from(request: AcceptOfferRequest) -> Self {
         PrivateTransportRequest::builder()
             .method(Method::POST)

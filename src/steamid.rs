@@ -242,12 +242,8 @@ impl<'de> Visitor<'de> for PlayerSteamIDVisitor {
             .parse::<SteamID>()
             .map_err(|err| E::custom(format!("error parsing SteamID from value: {}", err)))?;
 
-        PlayerSteamID::try_from(steam_id).map_err(|err| {
-            E::custom(format!(
-                "error creating PlayerSteamID from SteamID: {}",
-                err
-            ))
-        })
+        PlayerSteamID::try_from(steam_id)
+            .map_err(|err| E::custom(format!("error creating PlayerSteamID from SteamID: {}", err)))
     }
 }
 
@@ -279,23 +275,12 @@ mod tests {
         // testing invariants:
         // - valid 64-bit integer
         // - valid universe, instance, type, and account id
-        assert_matches!(
-            "".parse::<SteamID>(),
-            Err(ParseSteamIDError::ParseIntError(_))
-        );
-        assert_matches!(
-            "abcd".parse::<SteamID>(),
-            Err(ParseSteamIDError::ParseIntError(_))
-        );
+        assert_matches!("".parse::<SteamID>(), Err(ParseSteamIDError::ParseIntError(_)));
+        assert_matches!("abcd".parse::<SteamID>(), Err(ParseSteamIDError::ParseIntError(_)));
         assert_matches!("76561197960287930".parse::<SteamID>(), Ok(_));
 
         // since string parsing succeeds normally, we can just test From<u64> invariants
-        let invalid_id = form_id(
-            Universe::Public as u8,
-            Type::Clan as u16,
-            Instance::Web as u8,
-            1,
-        );
+        let invalid_id = form_id(Universe::Public as u8, Type::Clan as u16, Instance::Web as u8, 1);
         assert_matches!(
             SteamID::try_from(invalid_id),
             Err(ConvertSteamIDError::NonAllInstanceInClanID)
@@ -319,23 +304,10 @@ mod tests {
             Err(ConvertSteamIDError::InstanceOutOfRange(_))
         );
 
-        let invalid_id = form_id(
-            Universe::Public as u8,
-            Type::Individual as u16,
-            Instance::Web as u8,
-            0,
-        );
-        assert_matches!(
-            SteamID::try_from(invalid_id),
-            Err(ConvertSteamIDError::AccountIDIsZero)
-        );
+        let invalid_id = form_id(Universe::Public as u8, Type::Individual as u16, Instance::Web as u8, 0);
+        assert_matches!(SteamID::try_from(invalid_id), Err(ConvertSteamIDError::AccountIDIsZero));
 
-        let valid_id = form_id(
-            Universe::Public as u8,
-            Type::Individual as u16,
-            Instance::Web as u8,
-            1,
-        );
+        let valid_id = form_id(Universe::Public as u8, Type::Individual as u16, Instance::Web as u8, 1);
         assert_matches!(SteamID::try_from(valid_id), Ok(_));
 
         fn form_id(universe: u8, id_type: u16, instance: u8, account_id: u32) -> u64 {
@@ -361,23 +333,13 @@ mod tests {
         let steam_id = SteamID::from(player_steam_id);
         assert_eq!(u64::from(steam_id), 76561197960287930);
 
-        let invalid_id = form_id(
-            Universe::Beta as u8,
-            Type::Individual as u16,
-            Instance::Web as u8,
-            1,
-        );
+        let invalid_id = form_id(Universe::Beta as u8, Type::Individual as u16, Instance::Web as u8, 1);
         assert_matches!(
             PlayerSteamID::try_from(invalid_id),
             Err(ConvertPlayerSteamIDError::UniverseIsNotPublic)
         );
 
-        let invalid_id = form_id(
-            Universe::Public as u8,
-            Type::Chat as u16,
-            Instance::Web as u8,
-            1,
-        );
+        let invalid_id = form_id(Universe::Public as u8, Type::Chat as u16, Instance::Web as u8, 1);
         assert_matches!(
             PlayerSteamID::try_from(invalid_id),
             Err(ConvertPlayerSteamIDError::TypeIsNotIndividual)
@@ -389,9 +351,7 @@ mod tests {
             let instance = (instance as u64) << 32;
             let account_id = account_id as u64;
 
-            (universe | id_type | instance | account_id)
-                .try_into()
-                .unwrap()
+            (universe | id_type | instance | account_id).try_into().unwrap()
         }
     }
 }

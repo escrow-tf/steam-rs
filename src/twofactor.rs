@@ -19,11 +19,7 @@ impl QueryTimeRequest {
 pub struct QueryTimeResponse {}
 
 impl<'a> From<QueryTimeRequest>
-    for PrivateTransportRequest<
-        'a,
-        EncodedProtobufBody<CTwoFactorTimeRequest>,
-        CTwoFactorTimeResponse,
-    >
+    for PrivateTransportRequest<'a, EncodedProtobufBody<CTwoFactorTimeRequest>, CTwoFactorTimeResponse>
 {
     fn from(_value: QueryTimeRequest) -> Self {
         let request = CTwoFactorTimeRequest::default();
