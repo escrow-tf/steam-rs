@@ -258,8 +258,6 @@ pub struct PrivateTransportRequest<'a, B: TransportBody, R> {
 
     #[builder(default = PhantomData, skip_setter)]
     phantom: PhantomData<R>,
-    // #[builder(default = PhantomData, skip_setter)]
-    // phantom_inner: PhantomData<R>,
 }
 
 impl PrivateTransport {
@@ -335,72 +333,4 @@ impl PrivateTransport {
         let response = response.bytes().await?;
         R::decode(response).map_err(SendError::ProstDecodeError)
     }
-
-    // pub async fn send<'a, B: TransportBody, Inner, R: TransportResponse<Inner>>(
-    //     &self,
-    //     request: PrivateTransportRequest<'a, B, Inner, R>,
-    // ) -> Result<Inner, SendError> {
-    //     let mut url = Url::try_from(request.base_url)?;
-    //     url.set_path(request.path);
-
-    //     for (param, value) in &request.params {
-    //         url.query_pairs_mut().append_pair(param, value);
-    //     }
-
-    //     let http_client = if request.can_retry {
-    //         self.retry_client.clone()
-    //     } else {
-    //         self.client.clone()
-    //     };
-
-    //     let mut headers = request.headers.clone();
-    //     headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
-    //     headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
-
-    //     let mut http_request = http_client.request(request.method, url).headers(headers);
-
-    //     http_request = request.body.transform(http_request);
-
-    //     let response = http_request.send().await?;
-    //     let response = response.bytes().await?;
-
-    //     R::decode(bytes)
-    // }
 }
-
-// pub trait TransportResponse<Inner> {
-//     fn decode(bytes: Bytes) -> anyhow::Result<Inner>;
-// }
-
-// pub struct JsonResponse<Inner: for<'de> Deserialize<'de>> {
-//     phantom_inner: PhantomData<Inner>
-// }
-
-// impl<T: for<'de> Deserialize<'de>> TransportResponse<T> for JsonResponse<T> {
-//     fn decode(bytes: Bytes) -> anyhow::Result<T> {
-//         let string = str::from_utf8(&bytes)?;
-//         let result: T = serde_json::from_str(string)?;
-//         Ok(result)
-//     }
-// }
-
-// pub struct ProtoResponse<Inner: prost::Message + Default> {
-//     phantom_inner: PhantomData<Inner>
-// }
-
-// impl<T: prost::Message + Default> TransportResponse<T> for ProtoResponse<T> {
-//     fn decode(bytes: Bytes) -> anyhow::Result<T> {
-//         let result: T = T::decode(bytes)?;
-//         Ok(result)
-//     }
-// }
-
-// impl<'de: 'a, 'a, T> Deserialize<'de> for &'a T
-//     where T: prost::Message + Default
-// {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: serde::Deserializer<'de> {
-//         todo!()
-//     }
-// }
