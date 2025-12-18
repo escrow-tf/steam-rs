@@ -18,19 +18,17 @@ the transport handles requests over HTTP. There are three kinds of transports:
     - most responses use protobuf bodies
 */
 
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, str::Utf8Error, sync::Arc};
 
 use base64::{Engine, prelude::BASE64_STANDARD};
+use bytes::Bytes;
 use derive_more::From;
 use reqwest::{
-    Client, Method, Request, Url,
-    cookie::Jar,
-    header::{ACCEPT, HeaderMap, USER_AGENT},
-    multipart,
+    Client, Method, Request, Response, Url, cookie::Jar, header::{ACCEPT, HeaderMap, USER_AGENT}, multipart
 };
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use type_state_builder::TypeStateBuilder;
 use url::ParseError;
@@ -95,7 +93,13 @@ pub enum SendError {
     EResultError(#[from] steamlang::EnsureResultError),
 
     #[error(transparent)]
-    DecodeError(#[from] prost::DecodeError),
+    ProstDecodeError(#[from] prost::DecodeError),
+
+    #[error(transparent)]
+    JsonError(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    Utf8Error(#[from] Utf8Error),
 }
 
 impl PublicTransport {
@@ -154,11 +158,29 @@ impl PublicTransport {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PrivateTransport {
     jar: Arc<Jar>,
     client: ClientWithMiddleware,
     retry_client: ClientWithMiddleware,
+}
+
+pub enum TransportBody1 {
+    Empty,
+    FormValues(HashMap<String, String>),
+    MultipartValues(HashMap<String, String>),
+    Protobuf(Box<dyn prost::Message>),
+}
+
+impl std::fmt::Debug for TransportBody1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "Empty"),
+            Self::FormValues(arg0) => f.debug_tuple("FormValues").field(arg0).finish(),
+            Self::MultipartValues(arg0) => f.debug_tuple("MultipartValues").field(arg0).finish(),
+            Self::Protobuf(_) => f.debug_tuple("Protobuf").finish(),
+        }
+    }
 }
 
 pub trait TransportBody {
@@ -180,32 +202,15 @@ impl TransportBody for EmptyBody {
     }
 }
 
-pub struct FormBody(HashMap<String, String>);
+#[derive(Debug, derive_more::From)]
+pub struct UrlEncodedBody<T: Serialize + Sized>(T);
 
-impl TransportBody for FormBody {
+impl<T: Serialize + Sized> TransportBody for UrlEncodedBody<T> {
     fn transform(
         &self,
         request: reqwest_middleware::RequestBuilder,
     ) -> reqwest_middleware::RequestBuilder {
         request.form(&self.0)
-    }
-}
-
-pub struct MultipartBody(HashMap<String, String>);
-
-impl TransportBody for MultipartBody {
-    fn transform(
-        &self,
-        request: reqwest_middleware::RequestBuilder,
-    ) -> reqwest_middleware::RequestBuilder {
-        let form = self
-            .0
-            .iter()
-            .fold(multipart::Form::new(), |form, (param, value)| {
-                form.text(param.clone(), value.clone())
-            });
-
-        request.multipart(form)
     }
 }
 
@@ -227,7 +232,7 @@ impl<T: prost::Message> TransportBody for EncodedProtobufBody<T> {
 }
 
 #[derive(Debug, TypeStateBuilder)]
-pub struct PrivateTransportRequest<'a, B: TransportBody, R: prost::Message + Default> {
+pub struct PrivateTransportRequest<'a, B: TransportBody, R> {
     // TODO: cache_ttl
     #[builder(default = false)]
     can_retry: bool,
@@ -253,6 +258,8 @@ pub struct PrivateTransportRequest<'a, B: TransportBody, R: prost::Message + Def
 
     #[builder(default = PhantomData, skip_setter)]
     phantom: PhantomData<R>,
+    // #[builder(default = PhantomData, skip_setter)]
+    // phantom_inner: PhantomData<R>,
 }
 
 impl PrivateTransport {
@@ -278,10 +285,10 @@ impl PrivateTransport {
         })
     }
 
-    pub async fn send<'a, B: TransportBody, R: prost::Message + Default>(
+    async fn send_req<'a, B: TransportBody, R>(
         &self,
         request: PrivateTransportRequest<'a, B, R>,
-    ) -> Result<R, SendError> {
+    ) -> Result<Response, SendError> {
         let mut url = Url::try_from(request.base_url)?;
         url.set_path(request.path);
 
@@ -299,13 +306,101 @@ impl PrivateTransport {
         headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
         headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
 
-        let mut http_request = http_client.request(request.method, url).headers(headers);
+        let mut http_request = http_client
+            .request(request.method, url)
+            .headers(headers);
 
         http_request = request.body.transform(http_request);
 
         let response = http_request.send().await?;
-        let response = response.bytes().await?;
 
-        R::decode(response).map_err(SendError::DecodeError)
+        Ok(response)
     }
+
+    pub async fn send_json<'a, B: TransportBody, R: for<'de> Deserialize<'de>>(
+        &self,
+        request: PrivateTransportRequest<'a, B, R>,
+    ) -> Result<R, SendError> {
+        let response = self.send_req(request).await?;
+        let result: R = response.json().await?;
+        Ok(result)
+    }
+
+    pub async fn send_proto<'a, B: TransportBody, R: prost::Message + Default>(
+        &self,
+        request: PrivateTransportRequest<'a, B, R>,
+    ) -> Result<R, SendError> {
+        let response = self.send_req(request).await?;
+        // TODO: check if steam actually returns raw bytes instead of base64-encoded.
+        let response = response.bytes().await?;
+        R::decode(response).map_err(SendError::ProstDecodeError)
+    }
+
+    // pub async fn send<'a, B: TransportBody, Inner, R: TransportResponse<Inner>>(
+    //     &self,
+    //     request: PrivateTransportRequest<'a, B, Inner, R>,
+    // ) -> Result<Inner, SendError> {
+    //     let mut url = Url::try_from(request.base_url)?;
+    //     url.set_path(request.path);
+
+    //     for (param, value) in &request.params {
+    //         url.query_pairs_mut().append_pair(param, value);
+    //     }
+
+    //     let http_client = if request.can_retry {
+    //         self.retry_client.clone()
+    //     } else {
+    //         self.client.clone()
+    //     };
+
+    //     let mut headers = request.headers.clone();
+    //     headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
+    //     headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
+
+    //     let mut http_request = http_client.request(request.method, url).headers(headers);
+
+    //     http_request = request.body.transform(http_request);
+
+    //     let response = http_request.send().await?;
+    //     let response = response.bytes().await?;
+
+    //     R::decode(bytes)
+    // }
 }
+
+// pub trait TransportResponse<Inner> {
+//     fn decode(bytes: Bytes) -> anyhow::Result<Inner>;
+// }
+
+// pub struct JsonResponse<Inner: for<'de> Deserialize<'de>> {
+//     phantom_inner: PhantomData<Inner>
+// }
+
+// impl<T: for<'de> Deserialize<'de>> TransportResponse<T> for JsonResponse<T> {
+//     fn decode(bytes: Bytes) -> anyhow::Result<T> {
+//         let string = str::from_utf8(&bytes)?;
+//         let result: T = serde_json::from_str(string)?;
+//         Ok(result)
+//     }
+// }
+
+// pub struct ProtoResponse<Inner: prost::Message + Default> {
+//     phantom_inner: PhantomData<Inner>
+// }
+
+// impl<T: prost::Message + Default> TransportResponse<T> for ProtoResponse<T> {
+//     fn decode(bytes: Bytes) -> anyhow::Result<T> {
+//         let result: T = T::decode(bytes)?;
+//         Ok(result)
+//     }
+// }
+
+// impl<'de: 'a, 'a, T> Deserialize<'de> for &'a T
+//     where T: prost::Message + Default
+// {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de> {
+//         todo!()
+//     }
+// }
