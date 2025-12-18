@@ -319,7 +319,7 @@ impl PrivateTransport {
         &self,
         request: PrivateTransportRequest<'a, B, R>,
     ) -> Result<R, SendError> {
-        let response = self.send_req(request).await?;
+        let response = self.send(request).await?;
         let result: R = response.json().await?;
         Ok(result)
     }
@@ -328,7 +328,7 @@ impl PrivateTransport {
         &self,
         request: PrivateTransportRequest<'a, B, R>,
     ) -> Result<R, SendError> {
-        let response = self.send_req(request).await?;
+        let response = self.send(request).await?;
         // TODO: check if steam actually returns raw bytes instead of base64-encoded.
         let response = response.bytes().await?;
         R::decode(response).map_err(SendError::ProstDecodeError)
