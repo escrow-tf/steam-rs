@@ -1,6 +1,6 @@
 use std::io::Result;
 
-use prost_build;
+use prost_build::Config;
 
 fn main() -> Result<()> {
     let steamproto_package_name = "steamproto";
@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     let serializable_messages: [&str; 0] = [];
     let serializable_enums: [&str; 0] = [];
 
-    let mut config = prost_build::Config::new();
+    let mut config = Config::new();
     config.protoc_arg(format!("--proto_path={}", steamproto_path));
     config.default_package_filename(steamproto_package_name);
 
