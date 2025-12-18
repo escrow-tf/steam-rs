@@ -283,7 +283,7 @@ impl PrivateTransport {
         })
     }
 
-    async fn send_req<'a, B: TransportBody, R>(
+    pub async fn send<'a, B: TransportBody, R>(
         &self,
         request: PrivateTransportRequest<'a, B, R>,
     ) -> Result<Response, SendError> {
