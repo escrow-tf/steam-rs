@@ -11,7 +11,7 @@ pub struct QueryTimeRequest;
 
 impl QueryTimeRequest {
     pub fn new() -> Self {
-        QueryTimeRequest::default()
+        Self
     }
 }
 

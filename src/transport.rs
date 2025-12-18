@@ -21,7 +21,6 @@ the transport handles requests over HTTP. There are three kinds of transports:
 use std::{collections::HashMap, marker::PhantomData, str::Utf8Error, sync::Arc};
 
 use base64::{Engine, prelude::BASE64_STANDARD};
-use bytes::Bytes;
 use derive_more::From;
 use reqwest::{
     Client, Method, Request, Response, Url, cookie::Jar, header::{ACCEPT, HeaderMap, USER_AGENT}, multipart
