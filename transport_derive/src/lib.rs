@@ -86,10 +86,12 @@ fn impl_encode_macro(ast: &syn::DeriveInput) -> TokenStream {
         EnDecodeKind::Form => quote! { request.form(self) },
         EnDecodeKind::Json => quote! { request.json(self) },
         EnDecodeKind::Proto => quote! {
+            use ::prost::Message;
+            use ::base64::Engine;
             let bytes = self.encode_to_vec();
-            let encoded = BASE64_STANDARD.encode(bytes);
+            let encoded = ::base64::prelude::BASE64_STANDARD.encode(bytes);
 
-            let form = multipart::Form::new().text("input_protobuf_encoded", encoded);
+            let form = ::reqwest::multipart::Form::new().text("input_protobuf_encoded", encoded);
 
             request.multipart(form)
         },
@@ -128,7 +130,7 @@ fn impl_decode_macro(ast: &syn::DeriveInput) -> TokenStream {
         },
         EnDecodeKind::Proto => quote! {
             let bytes = response.bytes().await?;
-            let result: Self = R::decode(bytes)?;
+            let result: Self = ::prost::Message::decode(bytes)?;
             Ok(result)
         },
     };
