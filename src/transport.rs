@@ -18,19 +18,24 @@ the transport handles requests over HTTP. There are three kinds of transports:
     - most responses use protobuf bodies
 */
 
-use std::{collections::HashMap, marker::PhantomData, str::Utf8Error, sync::Arc};
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    str::{FromStr, Utf8Error},
+    sync::Arc,
+};
 
 use base64::{Engine, prelude::BASE64_STANDARD};
 use derive_more::From;
 use reqwest::{
-    Client, Method, Response, Url,
+    Client, Method, Url,
     cookie::Jar,
     header::{ACCEPT, HeaderMap, USER_AGENT},
     multipart,
 };
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use thiserror::Error;
 use transport::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
@@ -57,8 +62,8 @@ pub struct PublicTransportRequest<I: Encode, O: Decode> {
     #[builder(default = false)]
     requires_api_key: bool,
 
-    #[builder(default = String::from(WEB_API_BASE_URL))]
-    base_url: String,
+    #[builder(default = Url::from_str(WEB_API_BASE_URL).unwrap())]
+    base_url: Url,
 
     #[builder(required)]
     path: String,
@@ -130,7 +135,7 @@ impl PublicTransport {
     ///
     /// See [SendError].
     pub async fn send<I: Encode, O: Decode>(&self, request: PublicTransportRequest<I, O>) -> Result<O, SendError> {
-        let mut url = Url::try_from(request.base_url.as_str())?;
+        let mut url = request.base_url.clone();
         url.set_path(request.path.as_str());
 
         // for (param, value) in &request.params {
@@ -225,13 +230,14 @@ impl<T: prost::Message> TransportBody for EncodedProtobufBody<T> {
 }
 
 #[derive(Debug, TypeStateBuilder)]
-pub struct PrivateTransportRequest<'a, B: TransportBody, R> {
+#[builder(impl_into)]
+pub struct PrivateTransportRequest<I: Encode, O: Decode> {
     // TODO: cache_ttl
     #[builder(default = false)]
     can_retry: bool,
 
-    #[builder(default = WEB_API_BASE_URL)]
-    base_url: &'a str,
+    #[builder(default = Url::from_str(WEB_API_BASE_URL).unwrap(), converter = |url: &str| Url::from_str(url).unwrap())]
+    base_url: Url,
 
     #[builder(required)]
     path: String,
@@ -239,18 +245,18 @@ pub struct PrivateTransportRequest<'a, B: TransportBody, R> {
     #[builder(default = HashMap::new())]
     params: HashMap<String, String>,
 
-    #[builder(default = Method::POST)]
-    method: Method,
-
-    #[builder(required)]
-    body: B,
-
     // TODO: do I need a Content Type?
     #[builder(default = HeaderMap::default())]
     headers: HeaderMap,
 
+    #[builder(default = Method::POST)]
+    method: Method,
+
+    #[builder(required)]
+    data: I,
+
     #[builder(default = PhantomData, skip_setter)]
-    phantom: PhantomData<R>,
+    out_phantom: PhantomData<O>,
 }
 
 impl PrivateTransport {
@@ -276,11 +282,8 @@ impl PrivateTransport {
         })
     }
 
-    pub async fn send<'a, B: TransportBody, R>(
-        &self,
-        request: PrivateTransportRequest<'a, B, R>,
-    ) -> Result<Response, SendError> {
-        let mut url = Url::try_from(request.base_url)?;
+    pub async fn send<I: Encode, O: Decode>(&self, request: PrivateTransportRequest<I, O>) -> Result<O, SendError> {
+        let mut url = request.base_url.clone();
         url.set_path(&request.path);
 
         for (param, value) in &request.params {
@@ -297,34 +300,13 @@ impl PrivateTransport {
         headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
         headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
 
-        let mut http_request = http_client.request(request.method, url).headers(headers);
+        let http_request = http_client.request(request.method, url).headers(headers);
+        let http_request = request.data.encode(http_request);
+        let http_response = http_request.send().await?;
 
-        http_request = request.body.transform(http_request);
+        steamlang::ensure_success(&http_response)?;
+        steamlang::ensure_eresult(&http_response)?;
 
-        let response = http_request.send().await?;
-
-        steamlang::ensure_success(&response)?;
-        steamlang::ensure_eresult(&response)?;
-
-        Ok(response)
-    }
-
-    pub async fn send_json<'a, B: TransportBody, R: for<'de> Deserialize<'de>>(
-        &self,
-        request: PrivateTransportRequest<'a, B, R>,
-    ) -> Result<R, SendError> {
-        let response = self.send(request).await?;
-        let result: R = response.json().await?;
-        Ok(result)
-    }
-
-    pub async fn send_proto<'a, B: TransportBody, R: prost::Message + Default>(
-        &self,
-        request: PrivateTransportRequest<'a, B, R>,
-    ) -> Result<R, SendError> {
-        let response = self.send(request).await?;
-        // TODO: check if steam actually returns raw bytes instead of base64-encoded.
-        let response = response.bytes().await?;
-        R::decode(response).map_err(SendError::ProstDecodeError)
+        O::decode(http_response).await.map_err(SendError::Other)
     }
 }

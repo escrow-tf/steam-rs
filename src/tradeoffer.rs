@@ -1,33 +1,36 @@
 use derive_more::From;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
+use transport_derive::{Decode, Encode};
 
-use crate::transport::{PrivateTransportRequest, UrlEncodedBody};
+use crate::transport::PrivateTransportRequest;
 
 const COMMUNITY_BASE_URL: &str = "https://steamcommunity.com";
 
 #[derive(Debug, From, Serialize, Deserialize)]
 pub struct OfferId(u64);
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Encode)]
+#[encode(form)]
 pub struct AcceptOfferRequest {
     pub id: OfferId,
     pub session_id: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Decode)]
+#[decode(json)]
 pub struct ActionResponse {
     #[serde(rename = "tradeofferid")]
     pub trade_offer_id: OfferId,
 }
 
-impl<'a> From<AcceptOfferRequest> for PrivateTransportRequest<'a, UrlEncodedBody<AcceptOfferRequest>, ActionResponse> {
+impl From<AcceptOfferRequest> for PrivateTransportRequest<AcceptOfferRequest, ActionResponse> {
     fn from(request: AcceptOfferRequest) -> Self {
         PrivateTransportRequest::builder()
             .method(Method::POST)
             .base_url(COMMUNITY_BASE_URL)
             .path(format!("/tradeoffer/{}/accept", request.id.0))
-            .body(request.into())
+            .data(request)
             .build()
     }
 }

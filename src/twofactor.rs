@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::{
     steamproto::{CTwoFactorTimeRequest, CTwoFactorTimeResponse},
-    transport::{EncodedProtobufBody, PrivateTransportRequest},
+    transport::PrivateTransportRequest,
 };
 
 #[derive(Debug, Default)]
@@ -18,16 +18,14 @@ impl QueryTimeRequest {
 #[derive(Debug, Deserialize)]
 pub struct QueryTimeResponse {}
 
-impl<'a> From<QueryTimeRequest>
-    for PrivateTransportRequest<'a, EncodedProtobufBody<CTwoFactorTimeRequest>, CTwoFactorTimeResponse>
-{
+impl From<QueryTimeRequest> for PrivateTransportRequest<CTwoFactorTimeRequest, CTwoFactorTimeResponse> {
     fn from(_value: QueryTimeRequest) -> Self {
         let request = CTwoFactorTimeRequest::default();
 
         PrivateTransportRequest::builder()
             .method(Method::POST)
             .path("/ITwoFactorService/QueryTime/v0001".to_string())
-            .body(request.into())
+            .data(request)
             .build()
     }
 }
