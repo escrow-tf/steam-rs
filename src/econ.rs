@@ -6,7 +6,7 @@ use transport::Encode;
 use transport_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
-use crate::transport::PublicTransportRequest;
+use crate::transport::PublicRequest;
 
 #[derive(Debug, Deserialize)]
 pub enum TradeOfferState {
@@ -90,10 +90,10 @@ pub struct TradeOfferResponse {
     pub descriptions: Vec<community::Description>,
 }
 
-impl From<TradeOfferRequest> for PublicTransportRequest<TradeOfferRequest, TradeOfferResponse> {
+impl From<TradeOfferRequest> for PublicRequest<TradeOfferRequest, TradeOfferResponse> {
     fn from(request: TradeOfferRequest) -> Self {
         // TODO: do we even need the api key?
-        PublicTransportRequest::builder()
+        PublicRequest::builder()
             .can_retry(true)
             .requires_api_key(true)
             .path("/IEconService/GetTradeOffer/v1/")
@@ -170,10 +170,10 @@ pub struct TradeOffersResponse {
     pub descriptions: Vec<community::Description>,
 }
 
-impl From<TradeOffersRequest> for PublicTransportRequest<TradeOffersRequest, TradeOffersResponse> {
+impl From<TradeOffersRequest> for PublicRequest<TradeOffersRequest, TradeOffersResponse> {
     fn from(request: TradeOffersRequest) -> Self {
         // TODO: do we even need the api key?
-        PublicTransportRequest::builder()
+        PublicRequest::builder()
             .can_retry(true)
             .requires_api_key(true)
             .path("/IEconService/GetTradeOffer/v1/")

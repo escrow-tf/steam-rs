@@ -25,21 +25,16 @@ use std::{
     sync::Arc,
 };
 
-use base64::{Engine, prelude::BASE64_STANDARD};
-use derive_more::From;
 use reqwest::{
     Client, Method, Url,
     cookie::Jar,
     header::{ACCEPT, HeaderMap, USER_AGENT},
-    multipart,
 };
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use serde::Serialize;
 use thiserror::Error;
 use transport::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
-use url::ParseError;
 
 use crate::steamlang;
 
@@ -54,7 +49,7 @@ pub struct PublicTransport {
 
 #[derive(Debug, TypeStateBuilder)]
 #[builder(impl_into)]
-pub struct PublicTransportRequest<I: Encode, O: Decode> {
+pub struct PublicRequest<I: Encode, O: Decode> {
     // TODO: cache_ttl
     #[builder(default = false)]
     can_retry: bool,
@@ -78,40 +73,37 @@ pub struct PublicTransportRequest<I: Encode, O: Decode> {
 #[derive(Error, Debug)]
 pub enum NewTransportError {
     #[error(transparent)]
-    ReqwestError(#[from] reqwest::Error),
+    Reqwest(#[from] reqwest::Error),
 
     #[error(transparent)]
-    ParseError(#[from] ParseError),
+    Url(#[from] url::ParseError),
 }
 
 #[derive(Error, Debug)]
 pub enum SendError {
     #[error(transparent)]
-    UrlError(#[from] url::ParseError),
+    Url(#[from] url::ParseError),
 
     #[error(transparent)]
-    ReqwestError(#[from] reqwest::Error),
+    Reqwest(#[from] reqwest_middleware::Error),
 
     #[error(transparent)]
-    ReqwestMiddlewareError(#[from] reqwest_middleware::Error),
+    Status(#[from] steamlang::EnsureStatusError),
 
     #[error(transparent)]
-    StatusError(#[from] steamlang::EnsureStatusError),
+    SteamEResult(#[from] steamlang::EnsureResultError),
 
     #[error(transparent)]
-    EResultError(#[from] steamlang::EnsureResultError),
+    Prost(#[from] prost::DecodeError),
 
     #[error(transparent)]
-    ProstDecodeError(#[from] prost::DecodeError),
+    Json(#[from] serde_json::Error),
 
     #[error(transparent)]
-    JsonError(#[from] serde_json::Error),
+    Utf8(#[from] Utf8Error),
 
     #[error(transparent)]
-    Utf8Error(#[from] Utf8Error),
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+    Decode(#[from] anyhow::Error),
 }
 
 impl PublicTransport {
@@ -134,7 +126,7 @@ impl PublicTransport {
     /// ## Errors
     ///
     /// See [SendError].
-    pub async fn send<I: Encode, O: Decode>(&self, request: PublicTransportRequest<I, O>) -> Result<O, SendError> {
+    pub async fn send<I: Encode, O: Decode>(&self, request: PublicRequest<I, O>) -> Result<O, SendError> {
         let mut url = request.base_url.clone();
         url.set_path(request.path.as_str());
 
@@ -164,7 +156,7 @@ impl PublicTransport {
         steamlang::ensure_success(&http_response)?;
         steamlang::ensure_eresult(&http_response)?;
 
-        O::decode(http_response).await.map_err(SendError::Other)
+        O::decode(http_response).await.map_err(SendError::Decode)
     }
 }
 
@@ -173,60 +165,6 @@ pub struct PrivateTransport {
     jar: Arc<Jar>,
     client: ClientWithMiddleware,
     retry_client: ClientWithMiddleware,
-}
-
-pub enum TransportBody1 {
-    Empty,
-    FormValues(HashMap<String, String>),
-    MultipartValues(HashMap<String, String>),
-    Protobuf(Box<dyn prost::Message>),
-}
-
-impl std::fmt::Debug for TransportBody1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Empty => write!(f, "Empty"),
-            Self::FormValues(arg0) => f.debug_tuple("FormValues").field(arg0).finish(),
-            Self::MultipartValues(arg0) => f.debug_tuple("MultipartValues").field(arg0).finish(),
-            Self::Protobuf(_) => f.debug_tuple("Protobuf").finish(),
-        }
-    }
-}
-
-pub trait TransportBody {
-    fn transform(&self, request: RequestBuilder) -> RequestBuilder;
-}
-
-#[derive(Default)]
-pub struct EmptyBody;
-
-impl TransportBody for EmptyBody {
-    fn transform(&self, request: RequestBuilder) -> RequestBuilder {
-        request
-    }
-}
-
-#[derive(Debug, derive_more::From)]
-pub struct UrlEncodedBody<T: Serialize + Sized>(T);
-
-impl<T: Serialize + Sized> TransportBody for UrlEncodedBody<T> {
-    fn transform(&self, request: RequestBuilder) -> RequestBuilder {
-        request.form(&self.0)
-    }
-}
-
-#[derive(From)]
-pub struct EncodedProtobufBody<T: prost::Message>(T);
-
-impl<T: prost::Message> TransportBody for EncodedProtobufBody<T> {
-    fn transform(&self, request: RequestBuilder) -> RequestBuilder {
-        let bytes = self.0.encode_to_vec();
-        let encoded = BASE64_STANDARD.encode(bytes);
-
-        let form = multipart::Form::new().text("input_protobuf_encoded", encoded);
-
-        request.multipart(form)
-    }
 }
 
 #[derive(Debug, TypeStateBuilder)]
@@ -307,6 +245,6 @@ impl PrivateTransport {
         steamlang::ensure_success(&http_response)?;
         steamlang::ensure_eresult(&http_response)?;
 
-        O::decode(http_response).await.map_err(SendError::Other)
+        O::decode(http_response).await.map_err(SendError::Decode)
     }
 }

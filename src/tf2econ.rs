@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use transport_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
-use crate::{steamid::SteamID, transport::PublicTransportRequest};
+use crate::{steamid::SteamID, transport::PublicRequest};
 
 #[derive(Debug, TypeStateBuilder, Serialize, Encode)]
 #[encode(query)]
@@ -76,9 +76,9 @@ pub struct PlayerItemsResponse {
     pub result: PlayerItemsResult,
 }
 
-impl From<PlayerItemsRequest> for PublicTransportRequest<PlayerItemsRequest, PlayerItemsResponse> {
+impl From<PlayerItemsRequest> for PublicRequest<PlayerItemsRequest, PlayerItemsResponse> {
     fn from(request: PlayerItemsRequest) -> Self {
-        PublicTransportRequest::builder()
+        PublicRequest::builder()
             .can_retry(true)
             .requires_api_key(true)
             .path("/IEconItems_440/GetPlayerItems/v1/")
