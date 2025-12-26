@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{community, steamid::SteamID};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use transport::Encode;
+use transport_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
 use crate::transport::PublicTransportRequest;
@@ -70,34 +72,32 @@ pub struct TradeOffer {
     pub confirmation_method: OfferConfirmationMethod,
 }
 
-#[derive(Debug, TypeStateBuilder)]
-pub struct TradeOfferRequest<'a> {
+#[derive(Debug, TypeStateBuilder, Serialize, Encode)]
+#[encode(query)]
+pub struct TradeOfferRequest {
     #[builder(required)]
+    #[serde(rename = "tradeofferid")]
     trade_id: u64,
 
-    #[builder(default = "en_us")]
-    language: &'a str,
+    #[builder(default = String::from("en_us"))]
+    language: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Decode)]
+#[decode(json)]
 pub struct TradeOfferResponse {
     pub offer: TradeOffer,
     pub descriptions: Vec<community::Description>,
 }
 
-impl<'a> From<TradeOfferRequest<'a>> for PublicTransportRequest<'a, TradeOfferResponse> {
+impl From<TradeOfferRequest> for PublicTransportRequest<TradeOfferRequest, TradeOfferResponse> {
     fn from(request: TradeOfferRequest) -> Self {
-        let params = HashMap::from([
-            ("tradeofferid".to_string(), request.trade_id.to_string()),
-            ("language".to_string(), request.language.to_string()),
-        ]);
-
         // TODO: do we even need the api key?
         PublicTransportRequest::builder()
             .can_retry(true)
             .requires_api_key(true)
-            .params(params)
             .path("/IEconService/GetTradeOffer/v1/")
+            .data(request)
             .build()
     }
 }
@@ -107,11 +107,11 @@ pub enum OffersFilter {
     None,
     OnlyActive,
     OnlyHistorical,
-    OnlyHistoricalWithCutoff(u32),
+    OnlyHistoricalWithCutoff(&'static str),
 }
 
 #[derive(Debug, TypeStateBuilder)]
-pub struct TradeOffersRequest<'a> {
+pub struct TradeOffersRequest {
     #[builder(required)]
     get_sent: bool,
 
@@ -125,52 +125,59 @@ pub struct TradeOffersRequest<'a> {
     filter: OffersFilter,
 
     #[builder(default = "en_us")]
-    language: &'a str,
+    language: &'static str,
 }
 
-#[derive(Debug, Deserialize)]
+impl Encode for TradeOffersRequest {
+    fn encode(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder {
+        let mut params = HashMap::from([("language", self.language)]);
+
+        match self.filter {
+            OffersFilter::None => {}
+            OffersFilter::OnlyActive => {
+                params.insert("active_only", "1");
+            }
+            OffersFilter::OnlyHistorical => {
+                params.insert("historical_only", "1");
+            }
+            OffersFilter::OnlyHistoricalWithCutoff(cutoff) => {
+                params.insert("historical_only", "1");
+                params.insert("time_historical_cutoff", cutoff);
+            }
+        };
+
+        if self.get_sent {
+            params.insert("get_sent_offers", "1");
+        }
+
+        if self.get_received {
+            params.insert("get_received_offers", "1");
+        }
+
+        if self.get_descriptions {
+            params.insert("get_descriptions", "1");
+        }
+
+        request.query(&params)
+    }
+}
+
+#[derive(Debug, Deserialize, Decode)]
+#[decode(json)]
 pub struct TradeOffersResponse {
     pub sent: Vec<TradeOffer>,
     pub received: Vec<TradeOffer>,
     pub descriptions: Vec<community::Description>,
 }
 
-impl<'a> From<TradeOffersRequest<'a>> for PublicTransportRequest<'a, TradeOffersResponse> {
+impl From<TradeOffersRequest> for PublicTransportRequest<TradeOffersRequest, TradeOffersResponse> {
     fn from(request: TradeOffersRequest) -> Self {
-        let mut params = HashMap::from([(String::from("language"), request.language.to_string())]);
-
-        match request.filter {
-            OffersFilter::None => {}
-            OffersFilter::OnlyActive => {
-                params.insert(String::from("active_only"), String::from("1"));
-            }
-            OffersFilter::OnlyHistorical => {
-                params.insert(String::from("historical_only"), String::from("1"));
-            }
-            OffersFilter::OnlyHistoricalWithCutoff(cutoff) => {
-                params.insert(String::from("historical_only"), String::from("1"));
-                params.insert(String::from("time_historical_cutoff"), cutoff.to_string());
-            }
-        };
-
-        if request.get_sent {
-            params.insert(String::from("get_sent_offers"), String::from("1"));
-        }
-
-        if request.get_received {
-            params.insert(String::from("get_received_offers"), String::from("1"));
-        }
-
-        if request.get_descriptions {
-            params.insert(String::from("get_descriptions"), String::from("1"));
-        }
-
         // TODO: do we even need the api key?
         PublicTransportRequest::builder()
             .can_retry(true)
             .requires_api_key(true)
-            .params(params)
             .path("/IEconService/GetTradeOffer/v1/")
+            .data(request)
             .build()
     }
 }

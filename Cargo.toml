@@ -6,7 +6,19 @@ publish = false
 authors = ["escrow-tf"]
 license = "Apache-2.0"
 
+[workspace]
+default-members = [
+    ".",
+]
+members = [
+    ".",
+    "transport",
+    "transport_derive",
+]
+
 [dependencies]
+transport = { path = "./transport" }
+transport_derive = { path = "./transport_derive" }
 anyhow = "1.0"
 base64 = "0.22"
 bytes = "1.11"

@@ -1,14 +1,15 @@
-use std::collections::HashMap;
-
 use derive_more::From;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use transport_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
 use crate::{steamid::SteamID, transport::PublicTransportRequest};
 
-#[derive(Debug, TypeStateBuilder)]
+#[derive(Debug, TypeStateBuilder, Serialize, Encode)]
+#[encode(query)]
 pub struct PlayerItemsRequest {
     #[builder(required)]
+    #[serde(rename = "steamid")]
     steam_id: SteamID,
 }
 
@@ -69,20 +70,19 @@ pub struct EquipInfo {
     pub slot: i32,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Decode)]
+#[decode(json)]
 pub struct PlayerItemsResponse {
     pub result: PlayerItemsResult,
 }
 
-impl<'a> From<PlayerItemsRequest> for PublicTransportRequest<'a, PlayerItemsResponse> {
+impl From<PlayerItemsRequest> for PublicTransportRequest<PlayerItemsRequest, PlayerItemsResponse> {
     fn from(request: PlayerItemsRequest) -> Self {
-        let params = HashMap::from([("steamid".to_string(), request.steam_id.to_string())]);
-
         PublicTransportRequest::builder()
             .can_retry(true)
             .requires_api_key(true)
-            .params(params)
             .path("/IEconItems_440/GetPlayerItems/v1/")
+            .data(request)
             .build()
     }
 }

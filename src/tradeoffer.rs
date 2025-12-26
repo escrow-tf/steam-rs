@@ -26,7 +26,7 @@ impl<'a> From<AcceptOfferRequest> for PrivateTransportRequest<'a, UrlEncodedBody
         PrivateTransportRequest::builder()
             .method(Method::POST)
             .base_url(COMMUNITY_BASE_URL)
-            .path("/ITwoFactorService/QueryTime/v0001")
+            .path(format!("/tradeoffer/{}/accept", request.id.0))
             .body(request.into())
             .build()
     }

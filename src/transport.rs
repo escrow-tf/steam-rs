@@ -23,15 +23,16 @@ use std::{collections::HashMap, marker::PhantomData, str::Utf8Error, sync::Arc};
 use base64::{Engine, prelude::BASE64_STANDARD};
 use derive_more::From;
 use reqwest::{
-    Client, Method, Request, Response, Url,
+    Client, Method, Response, Url,
     cookie::Jar,
     header::{ACCEPT, HeaderMap, USER_AGENT},
     multipart,
 };
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, RequestBuilder};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use transport::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 use url::ParseError;
 
@@ -41,13 +42,14 @@ const WEB_API_BASE_URL: &str = "https://api.steampowered.com";
 
 #[derive(Clone)]
 pub struct PublicTransport {
-    client: Client,
+    client: ClientWithMiddleware,
     retry_client: ClientWithMiddleware,
     api_key: String,
 }
 
 #[derive(Debug, TypeStateBuilder)]
-pub struct PublicTransportRequest<'a, R: DeserializeOwned> {
+#[builder(impl_into)]
+pub struct PublicTransportRequest<I: Encode, O: Decode> {
     // TODO: cache_ttl
     #[builder(default = false)]
     can_retry: bool,
@@ -55,17 +57,17 @@ pub struct PublicTransportRequest<'a, R: DeserializeOwned> {
     #[builder(default = false)]
     requires_api_key: bool,
 
-    #[builder(default = HashMap::new())]
-    params: HashMap<String, String>,
-
-    #[builder(default = WEB_API_BASE_URL)]
-    base_url: &'a str,
+    #[builder(default = String::from(WEB_API_BASE_URL))]
+    base_url: String,
 
     #[builder(required)]
-    path: &'a str,
+    path: String,
+
+    #[builder(required)]
+    data: I,
 
     #[builder(default = PhantomData, skip_setter)]
-    phantom: PhantomData<R>,
+    out_phantom: PhantomData<O>,
 }
 
 #[derive(Error, Debug)]
@@ -102,6 +104,9 @@ pub enum SendError {
 
     #[error(transparent)]
     Utf8Error(#[from] Utf8Error),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl PublicTransport {
@@ -113,7 +118,7 @@ impl PublicTransport {
             .build();
 
         Ok(Self {
-            client,
+            client: ClientWithMiddleware::from(client),
             retry_client,
             api_key: api_key.to_string(),
         })
@@ -124,36 +129,37 @@ impl PublicTransport {
     /// ## Errors
     ///
     /// See [SendError].
-    pub async fn send<'a, R: DeserializeOwned>(&self, request: PublicTransportRequest<'a, R>) -> Result<R, SendError> {
-        let mut url = Url::try_from(request.base_url)?;
-        url.set_path(request.path);
+    pub async fn send<I: Encode, O: Decode>(&self, request: PublicTransportRequest<I, O>) -> Result<O, SendError> {
+        let mut url = Url::try_from(request.base_url.as_str())?;
+        url.set_path(request.path.as_str());
 
-        for (param, value) in &request.params {
-            url.query_pairs_mut().append_pair(param, value);
-        }
+        // for (param, value) in &request.params {
+        //     url.query_pairs_mut().append_pair(param, value);
+        // }
 
         if request.requires_api_key {
             url.query_pairs_mut().append_pair("key", &self.api_key);
         }
 
-        let mut http_request = Request::new(Method::GET, url);
-        let headers = http_request.headers_mut();
+        let http_client = if request.can_retry {
+            self.retry_client.clone()
+        } else {
+            self.client.clone()
+        };
 
+        let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
         headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
 
-        let http_response = if request.can_retry {
-            self.retry_client.execute(http_request).await?
-        } else {
-            self.client.execute(http_request).await?
-        };
+        let http_request = http_client.request(Method::GET, url).headers(headers);
 
-        let http_response = http_response;
+        let http_request = request.data.encode(http_request);
+        let http_response = http_request.send().await?;
 
         steamlang::ensure_success(&http_response)?;
         steamlang::ensure_eresult(&http_response)?;
 
-        http_response.json().await.map_err(SendError::ReqwestError)
+        O::decode(http_response).await.map_err(SendError::Other)
     }
 }
 
@@ -183,14 +189,14 @@ impl std::fmt::Debug for TransportBody1 {
 }
 
 pub trait TransportBody {
-    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder;
+    fn transform(&self, request: RequestBuilder) -> RequestBuilder;
 }
 
 #[derive(Default)]
 pub struct EmptyBody;
 
 impl TransportBody for EmptyBody {
-    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder {
+    fn transform(&self, request: RequestBuilder) -> RequestBuilder {
         request
     }
 }
@@ -199,7 +205,7 @@ impl TransportBody for EmptyBody {
 pub struct UrlEncodedBody<T: Serialize + Sized>(T);
 
 impl<T: Serialize + Sized> TransportBody for UrlEncodedBody<T> {
-    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder {
+    fn transform(&self, request: RequestBuilder) -> RequestBuilder {
         request.form(&self.0)
     }
 }
@@ -208,7 +214,7 @@ impl<T: Serialize + Sized> TransportBody for UrlEncodedBody<T> {
 pub struct EncodedProtobufBody<T: prost::Message>(T);
 
 impl<T: prost::Message> TransportBody for EncodedProtobufBody<T> {
-    fn transform(&self, request: reqwest_middleware::RequestBuilder) -> reqwest_middleware::RequestBuilder {
+    fn transform(&self, request: RequestBuilder) -> RequestBuilder {
         let bytes = self.0.encode_to_vec();
         let encoded = BASE64_STANDARD.encode(bytes);
 
@@ -228,7 +234,7 @@ pub struct PrivateTransportRequest<'a, B: TransportBody, R> {
     base_url: &'a str,
 
     #[builder(required)]
-    path: &'a str,
+    path: String,
 
     #[builder(default = HashMap::new())]
     params: HashMap<String, String>,
@@ -275,7 +281,7 @@ impl PrivateTransport {
         request: PrivateTransportRequest<'a, B, R>,
     ) -> Result<Response, SendError> {
         let mut url = Url::try_from(request.base_url)?;
-        url.set_path(request.path);
+        url.set_path(&request.path);
 
         for (param, value) in &request.params {
             url.query_pairs_mut().append_pair(param, value);
@@ -296,6 +302,9 @@ impl PrivateTransport {
         http_request = request.body.transform(http_request);
 
         let response = http_request.send().await?;
+
+        steamlang::ensure_success(&response)?;
+        steamlang::ensure_eresult(&response)?;
 
         Ok(response)
     }

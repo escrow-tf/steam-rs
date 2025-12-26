@@ -26,7 +26,7 @@ impl<'a> From<QueryTimeRequest>
 
         PrivateTransportRequest::builder()
             .method(Method::POST)
-            .path("/ITwoFactorService/QueryTime/v0001")
+            .path("/ITwoFactorService/QueryTime/v0001".to_string())
             .body(request.into())
             .build()
     }
