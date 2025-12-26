@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use std::io::Write;
@@ -8,13 +8,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 type HmacSha1 = Hmac<Sha1>;
 
-pub struct State<'a> {
-    shared_secret: &'a [u8],
+pub struct State {
+    shared_secret: Bytes,
 }
 
-impl<'a> State<'a> {
-    pub fn new(secret: &'a [u8]) -> Self {
-        Self { shared_secret: secret }
+impl State {
+    pub fn new(shared_secret: Bytes) -> Self {
+        Self { shared_secret }
     }
 
     pub fn next(&self, time: SystemTime) -> anyhow::Result<String> {
@@ -25,7 +25,7 @@ impl<'a> State<'a> {
         time_buffer.write_u64::<BigEndian>(time)?;
 
         // Evaluate hash code for `tb` by key
-        let mut mac = HmacSha1::new_from_slice(self.shared_secret)?;
+        let mut mac = HmacSha1::new_from_slice(&self.shared_secret[..])?;
         mac.update(time_buffer.as_slice());
         let hashcode = mac.finalize().into_bytes();
 
@@ -70,13 +70,13 @@ impl<'a> State<'a> {
     }
 }
 
-pub struct Confirm<'a> {
-    identity: &'a [u8],
+pub struct Confirm {
+    identity: Bytes,
 }
 
-impl<'a> Confirm<'a> {
-    pub fn new(secret: &'a [u8]) -> Self {
-        Self { identity: secret }
+impl Confirm {
+    pub fn new(identity: Bytes) -> Self {
+        Self { identity }
     }
 
     pub fn generate_key(&self, use_time: SystemTime, tag: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -93,7 +93,7 @@ impl<'a> Confirm<'a> {
             return Err(anyhow!("failed to write entire tag to key buffer"));
         }
 
-        let mut mac = HmacSha1::new_from_slice(self.identity)?;
+        let mut mac = HmacSha1::new_from_slice(&self.identity[..])?;
         mac.update(&buffer);
         Ok(mac.finalize().into_bytes().to_vec())
     }
@@ -110,7 +110,7 @@ mod test {
     fn generates_valid_auth_code() {
         const SECRET: &str = "cnOgv/KdpLoP6Nbh0GMkXkPXALQ=";
         let secret_bytes = BASE64_STANDARD.decode(SECRET).unwrap();
-        let state = State::new(secret_bytes.as_slice());
+        let state = State::new(secret_bytes.into());
 
         let time = Utc.with_ymd_and_hms(2025, 1, 1, 12, 30, 15).earliest().unwrap();
         let code = state.next(time.into()).unwrap();

@@ -38,7 +38,8 @@ use type_state_builder::TypeStateBuilder;
 
 use crate::steamlang;
 
-const WEB_API_BASE_URL: &str = "https://api.steampowered.com";
+pub const WEB_API_BASE_URL: &str = "https://api.steampowered.com";
+pub const COMMUNITY_BASE_URL: &str = "https://www.steamcommunity.com";
 
 #[derive(Clone)]
 pub struct PublicTransport {
