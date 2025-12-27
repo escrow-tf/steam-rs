@@ -1,5 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
+use transport_derive::{Decode, Encode};
+use type_state_builder::TypeStateBuilder;
+
+use crate::{steamid::SteamID, transport::{COMMUNITY_BASE_URL, PrivateRequest, PublicRequest}};
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
@@ -73,4 +77,63 @@ pub struct Line {
 pub struct Action {
     pub link: String,
     pub name: String,
+}
+
+#[derive(Debug, Deserialize, Decode)]
+#[decode(json)]
+pub struct PlayerInventory {
+    pub assets: Vec<Asset>,
+    pub descriptions: Vec<Description>,
+    pub more_items: Option<u64>,
+
+    #[serde(rename = "last_assetid")]
+    pub last_asset_id: Option<u64>,
+    pub total_inventory_count: u64,
+    pub success: u8,
+    pub rwgrsn: u8,
+}
+
+#[derive(Debug, TypeStateBuilder, Serialize, Encode)]
+#[encode(form)]
+pub struct PlayerInventoryRequest {
+    #[builder(default = 0)]
+    start: u64,
+    
+    #[builder(default = 100)]
+    count: u64,
+    
+    #[builder(default = String::from("en_us"))]
+    #[serde(rename = "l")]
+    language: String,
+
+    #[builder(required)]
+    #[serde(skip_serializing)]
+    steam_id: SteamID,
+
+    #[builder(required)]
+    #[serde(skip_serializing)]
+    app_id: u64,
+
+    #[builder(default = 2)]
+    #[serde(skip_serializing)]
+    context_id: u64,
+}
+
+impl From<PlayerInventoryRequest> for PublicRequest<PlayerInventoryRequest, PlayerInventory> {
+    fn from(request: PlayerInventoryRequest) -> Self {
+        let steam_id = request.steam_id.to_string();
+        let app_id = request.app_id.to_string();
+        let context_id = request.context_id.to_string();
+
+        let steam_id = urlencoding::encode(&steam_id);
+        let app_id = urlencoding::encode(&app_id);
+        let context_id = urlencoding::encode(&context_id);
+
+        PublicRequest::builder()
+            .base_url(COMMUNITY_BASE_URL)
+            .path(format!("/inventory/{}/{}/{}", app_id, steam_id, context_id))
+            .can_retry(true)
+            .data(request)
+            .build()
+    }
 }
