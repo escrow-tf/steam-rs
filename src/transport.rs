@@ -170,7 +170,7 @@ pub struct PrivateTransport {
 
 #[derive(Debug, TypeStateBuilder)]
 #[builder(impl_into)]
-pub struct PrivateTransportRequest<I: Encode, O: Decode> {
+pub struct PrivateRequest<I: Encode, O: Decode> {
     // TODO: cache_ttl
     #[builder(default = false)]
     can_retry: bool,
@@ -221,7 +221,7 @@ impl PrivateTransport {
         })
     }
 
-    pub async fn send<I: Encode, O: Decode>(&self, request: PrivateTransportRequest<I, O>) -> Result<O, SendError> {
+    pub async fn send<I: Encode, O: Decode>(&self, request: PrivateRequest<I, O>) -> Result<O, SendError> {
         let mut url = request.base_url.clone();
         url.set_path(&request.path);
 

@@ -3,7 +3,7 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use transport_derive::{Decode, Encode};
 
-use crate::transport::{COMMUNITY_BASE_URL, PrivateTransportRequest};
+use crate::transport::{COMMUNITY_BASE_URL, PrivateRequest};
 
 #[derive(Debug, From, Serialize, Deserialize)]
 pub struct OfferId(u64);
@@ -22,9 +22,9 @@ pub struct AcceptOfferRequest {
     pub session_id: String,
 }
 
-impl From<AcceptOfferRequest> for PrivateTransportRequest<AcceptOfferRequest, ActionResponse> {
+impl From<AcceptOfferRequest> for PrivateRequest<AcceptOfferRequest, ActionResponse> {
     fn from(request: AcceptOfferRequest) -> Self {
-        PrivateTransportRequest::builder()
+        PrivateRequest::builder()
             .method(Method::POST)
             .base_url(COMMUNITY_BASE_URL)
             .path(format!("/tradeoffer/{}/accept", request.id.0))
@@ -39,9 +39,9 @@ pub struct DeclineOfferRequest {
     pub id: OfferId,
 }
 
-impl From<DeclineOfferRequest> for PrivateTransportRequest<DeclineOfferRequest, ActionResponse> {
+impl From<DeclineOfferRequest> for PrivateRequest<DeclineOfferRequest, ActionResponse> {
     fn from(request: DeclineOfferRequest) -> Self {
-        PrivateTransportRequest::builder()
+        PrivateRequest::builder()
             .method(Method::POST)
             .base_url(COMMUNITY_BASE_URL)
             .path(format!("/tradeoffer/{}/decline", request.id.0))
@@ -56,9 +56,9 @@ pub struct CancelOfferRequest {
     pub id: OfferId,
 }
 
-impl From<CancelOfferRequest> for PrivateTransportRequest<CancelOfferRequest, ActionResponse> {
+impl From<CancelOfferRequest> for PrivateRequest<CancelOfferRequest, ActionResponse> {
     fn from(request: CancelOfferRequest) -> Self {
-        PrivateTransportRequest::builder()
+        PrivateRequest::builder()
             .method(Method::POST)
             .base_url(COMMUNITY_BASE_URL)
             .path(format!("/tradeoffer/{}/cancel", request.id.0))
