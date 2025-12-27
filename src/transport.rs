@@ -42,6 +42,7 @@ pub const WEB_API_BASE_URL: &str = "https://api.steampowered.com";
 pub const COMMUNITY_BASE_URL: &str = "https://www.steamcommunity.com";
 
 #[derive(Clone)]
+/// Handles requests to Steam's Public Web API.
 pub struct PublicTransport {
     client: ClientWithMiddleware,
     retry_client: ClientWithMiddleware,
@@ -108,6 +109,11 @@ pub enum SendError {
 }
 
 impl PublicTransport {
+    /// Create a new [`PublicTransport`], used for handling requests to Steam's Public Web API.
+    ///
+    /// ### Errors
+    ///
+    /// Only fails if [`reqwest::ClientBuilder`] fails to initialize a TLS backend.
     pub fn new(api_key: &str) -> Result<Self, NewTransportError> {
         let client = Client::builder().build()?;
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(4);
