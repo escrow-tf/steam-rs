@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use base64::prelude::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{Bytes, BytesMut};
 use hmac::{Hmac, Mac};
@@ -74,12 +75,57 @@ pub struct MobileConf {
     identity: Bytes,
 }
 
+#[derive(Debug)]
+pub struct ConfirmationKey {
+    unix_time: u64,
+    tag: String,
+    bytes: Box<[u8]>,
+}
+
+impl ConfirmationKey {
+    pub fn unix_time(&self) -> u64 {
+        self.unix_time
+    }
+
+    pub fn tag(&self) -> &str {
+        &self.tag
+    }
+
+    pub fn tag_owned(&self) -> String {
+        self.tag.clone()
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub fn to_string(&self) -> String {
+        BASE64_STANDARD.encode(&self.bytes)
+    }
+}
+
 impl MobileConf {
     pub fn new(identity: Bytes) -> Self {
         Self { identity }
     }
 
-    pub fn next(&self, use_time: SystemTime, tag: &[u8]) -> anyhow::Result<Vec<u8>> {
+    pub fn next_getlist(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
+        self.next(use_time, "getlist")
+    }
+
+    pub fn next_details(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
+        self.next(use_time, "details")
+    }
+
+    pub fn next_accept(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
+        self.next(use_time, "accept")
+    }
+
+    pub fn next_rject(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
+        self.next(use_time, "rject")
+    }
+
+    fn next(&self, use_time: SystemTime, tag: &str) -> anyhow::Result<ConfirmationKey> {
         let unix_time = use_time.duration_since(UNIX_EPOCH)?.as_secs();
 
         const TIME_SIZE: usize = size_of::<u64>();
@@ -90,14 +136,18 @@ impl MobileConf {
 
         (&mut buffer[0..TIME_SIZE]).write_u64::<BigEndian>(unix_time)?;
 
-        let written = (&mut buffer[TIME_SIZE..]).write(tag)?;
+        let written = (&mut buffer[TIME_SIZE..]).write(tag.as_bytes())?;
         if written != data_length {
             return Err(anyhow!("failed to write entire tag to key buffer"));
         }
 
         let mut mac = HmacSha1::new_from_slice(&self.identity[..])?;
         mac.update(&buffer);
-        Ok(mac.finalize().into_bytes().to_vec())
+        Ok(ConfirmationKey {
+            unix_time: unix_time,
+            tag: tag.to_string(),
+            bytes: Box::from(mac.finalize().into_bytes().as_slice()),
+        })
     }
 }
 
@@ -146,8 +196,8 @@ mod tests {
         ];
 
         for (tag, expected) in tag_result_pairs {
-            let code = identity.next(time.into(), tag.as_bytes()).unwrap();
-            let code = BASE64_STANDARD.encode(code);
+            let code = identity.next(time.into(), tag).unwrap();
+            let code = code.to_string();
 
             assert_eq!(code, expected, "expected {}, got {}, for tag {}", expected, code, tag);
         }
@@ -165,8 +215,8 @@ mod tests {
         ];
 
         for (tag, expected) in tag_result_pairs {
-            let code = identity.next(time.into(), tag.as_bytes()).unwrap();
-            let code = BASE64_STANDARD.encode(code);
+            let code = identity.next(time.into(), tag).unwrap();
+            let code = code.to_string();
 
             assert_eq!(code, expected, "expected {}, got {}, for tag {}", expected, code, tag);
         }

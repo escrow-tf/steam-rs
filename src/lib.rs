@@ -3,6 +3,7 @@
 
 pub mod community;
 pub mod econ;
+pub mod mobile;
 pub mod steamid;
 pub mod steamlang;
 pub mod tf2econ;
