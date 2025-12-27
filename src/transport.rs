@@ -73,15 +73,6 @@ pub struct PublicRequest<I: Encode, O: Decode> {
 }
 
 #[derive(Error, Debug)]
-pub enum NewTransportError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-
-    #[error(transparent)]
-    Url(#[from] url::ParseError),
-}
-
-#[derive(Error, Debug)]
 pub enum SendError {
     #[error(transparent)]
     Url(#[from] url::ParseError),
@@ -114,7 +105,7 @@ impl PublicTransport {
     /// ### Errors
     ///
     /// Only fails if [`reqwest::ClientBuilder`] fails to initialize a TLS backend.
-    pub fn new(api_key: &str) -> Result<Self, NewTransportError> {
+    pub fn new(api_key: &str) -> anyhow::Result<Self> {
         let client = Client::builder().build()?;
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(4);
         let retry_client = ClientBuilder::new(client.clone())
@@ -205,7 +196,13 @@ pub struct PrivateRequest<I: Encode, O: Decode> {
 }
 
 impl PrivateTransport {
-    pub fn new() -> Result<Self, NewTransportError> {
+    /// Create a new [`PublicTransport`], used for handling requests to Steam's Public Web API.
+    ///
+    /// ### Errors
+    ///
+    /// - Fails if [`reqwest::ClientBuilder`] fails to initialize a TLS backend.
+    /// - Fails if [`Url::parse`] fails, when initializing the cookie jar.
+    pub fn new() -> anyhow::Result<Self> {
         // TODO: support Steam Client requests, not just mobile/web
         let jar = Jar::default();
         let cookie_url = "steamcommunity.com".parse::<Url>()?;
