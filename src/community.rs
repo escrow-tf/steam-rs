@@ -3,7 +3,10 @@ use serde_with::{DisplayFromStr, serde_as};
 use transport_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
-use crate::{steamid::SteamID, transport::{COMMUNITY_BASE_URL, PrivateRequest, PublicRequest}};
+use crate::{
+    steamid::SteamID,
+    transport::{COMMUNITY_BASE_URL, PublicRequest},
+};
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
@@ -98,10 +101,10 @@ pub struct PlayerInventory {
 pub struct PlayerInventoryRequest {
     #[builder(default = 0)]
     start: u64,
-    
+
     #[builder(default = 100)]
     count: u64,
-    
+
     #[builder(default = String::from("en_us"))]
     #[serde(rename = "l")]
     language: String,
