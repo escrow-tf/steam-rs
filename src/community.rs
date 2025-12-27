@@ -1,12 +1,10 @@
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 use transport_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
-use crate::{
-    steamid::SteamID,
-    transport::{COMMUNITY_BASE_URL, PublicRequest},
-};
+use crate::{steamid::SteamID, transport::PrivateRequest};
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
@@ -122,7 +120,7 @@ pub struct PlayerInventoryRequest {
     context_id: u64,
 }
 
-impl From<PlayerInventoryRequest> for PublicRequest<PlayerInventoryRequest, PlayerInventory> {
+impl From<PlayerInventoryRequest> for PrivateRequest<PlayerInventoryRequest, PlayerInventory> {
     fn from(request: PlayerInventoryRequest) -> Self {
         let steam_id = request.steam_id.to_string();
         let app_id = request.app_id.to_string();
@@ -132,8 +130,8 @@ impl From<PlayerInventoryRequest> for PublicRequest<PlayerInventoryRequest, Play
         let app_id = urlencoding::encode(&app_id);
         let context_id = urlencoding::encode(&context_id);
 
-        PublicRequest::builder()
-            .base_url(COMMUNITY_BASE_URL)
+        PrivateRequest::builder()
+            .method(Method::GET)
             .path(format!("/inventory/{}/{}/{}", app_id, steam_id, context_id))
             .can_retry(true)
             .data(request)
