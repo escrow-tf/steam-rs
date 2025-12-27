@@ -58,7 +58,7 @@ pub struct PublicRequest<I: Encode, O: Decode> {
     #[builder(default = false)]
     requires_api_key: bool,
 
-    #[builder(default = Url::from_str(WEB_API_BASE_URL).unwrap())]
+    #[builder(default = Url::from_str(WEB_API_BASE_URL).unwrap(), converter = |url: &str| Url::from_str(url).unwrap())]
     base_url: Url,
 
     #[builder(required)]
@@ -175,7 +175,7 @@ pub struct PrivateRequest<I: Encode, O: Decode> {
     #[builder(default = false)]
     can_retry: bool,
 
-    #[builder(default = Url::from_str(WEB_API_BASE_URL).unwrap(), converter = |url: &str| Url::from_str(url).unwrap())]
+    #[builder(default = Url::from_str(COMMUNITY_BASE_URL).unwrap(), converter = |url: &str| Url::from_str(url).unwrap())]
     base_url: Url,
 
     #[builder(required)]
