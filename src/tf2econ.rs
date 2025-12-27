@@ -18,8 +18,9 @@ pub struct PlayerItemsResult {
     pub status: i32,
     pub status_detail: Option<String>,
     pub num_backpack_slots: Option<i32>,
-    pub items: Option<Vec<Item>>,
-    // TODO: items,
+
+    #[serde(default)]
+    pub items: Vec<Item>,
 }
 
 #[derive(Debug, Deserialize)]
