@@ -1,7 +1,7 @@
 use derive_more::From;
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
-use transport_derive::{Decode, Encode};
+use steam_encode_derive::{Decode, Encode};
 
 use crate::transport::{COMMUNITY_BASE_URL, PrivateRequest};
 

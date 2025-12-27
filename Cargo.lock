@@ -1875,13 +1875,30 @@ dependencies = [
  "serde_urlencoded",
  "serde_with",
  "sha1",
+ "steam_encode",
+ "steam_encode_derive",
  "thiserror 2.0.17",
  "toml",
- "transport",
- "transport_derive",
  "type-state-builder",
  "url",
  "urlencoding",
+]
+
+[[package]]
+name = "steam_encode"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "reqwest-middleware",
+]
+
+[[package]]
+name = "steam_encode_derive"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2214,23 +2231,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a04e24fab5c89c6a36eb8558c9656f30d81de51dfa4d3b45f26b21d61fa0a6c"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "transport"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "reqwest",
- "reqwest-middleware",
-]
-
-[[package]]
-name = "transport_derive"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn",
 ]
 
 [[package]]

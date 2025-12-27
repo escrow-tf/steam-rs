@@ -12,8 +12,8 @@ default-members = [
 ]
 members = [
     ".",
-    "transport",
-    "transport_derive",
+    "steam_encode",
+    "steam_encode_derive",
 ]
 
 [dependencies]
@@ -39,8 +39,8 @@ sha1 = "0.10"
 type-state-builder = "0.5.0"
 url = "2.5"
 urlencoding = "2.1.3"
-transport = { path = "./transport" }
-transport_derive = { path = "./transport_derive" }
+steam_encode = { path = "./steam_encode" }
+steam_encode_derive = { path = "./steam_encode_derive" }
 thiserror = "2.0"
 
 [build-dependencies]

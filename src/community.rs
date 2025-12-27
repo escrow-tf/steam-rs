@@ -1,7 +1,7 @@
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
-use transport_derive::{Decode, Encode};
+use steam_encode_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
 use crate::{steamid::SteamID, transport::PrivateRequest};

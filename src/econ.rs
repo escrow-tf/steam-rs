@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{community, steamid::SteamID};
 use serde::{Deserialize, Serialize};
-use transport::Encode;
-use transport_derive::{Decode, Encode};
+use steam_encode::Encode;
+use steam_encode_derive::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
 use crate::transport::PublicRequest;

@@ -21,7 +21,7 @@ the transport handles requests over HTTP. There are three kinds of transports:
 use std::{
     collections::HashMap,
     marker::PhantomData,
-    str::{FromStr, Utf8Error},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -33,7 +33,7 @@ use reqwest::{
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use thiserror::Error;
-use transport::{Decode, Encode};
+use steam_encode::{Decode, Encode};
 use type_state_builder::TypeStateBuilder;
 
 use crate::steamlang;

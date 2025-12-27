@@ -98,7 +98,7 @@ fn impl_encode_macro(ast: &syn::DeriveInput) -> TokenStream {
     };
 
     let generated = quote! {
-        impl #generics ::transport::Encode for #name #generics #where_clause {
+        impl #generics ::steam_encode::Encode for #name #generics #where_clause {
             fn encode(&self, request: ::reqwest_middleware::RequestBuilder) -> ::reqwest_middleware::RequestBuilder {
                 #encode_impl
             }
@@ -136,7 +136,7 @@ fn impl_decode_macro(ast: &syn::DeriveInput) -> TokenStream {
     };
 
     let generated = quote! {
-        impl #generics ::transport::Decode for #name #generics #where_clause {
+        impl #generics ::steam_encode::Decode for #name #generics #where_clause {
             async fn decode(response: ::reqwest::Response) -> ::anyhow::Result<Self> {
                 #decode_impl
             }
