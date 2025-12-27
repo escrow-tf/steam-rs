@@ -8,11 +8,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 type HmacSha1 = Hmac<Sha1>;
 
-pub struct State {
+pub struct Auth {
     shared_secret: Bytes,
 }
 
-impl State {
+impl Auth {
     pub fn new(shared_secret: Bytes) -> Self {
         Self { shared_secret }
     }
@@ -70,22 +70,24 @@ impl State {
     }
 }
 
-pub struct Confirm {
+pub struct MobileConf {
     identity: Bytes,
 }
 
-impl Confirm {
+impl MobileConf {
     pub fn new(identity: Bytes) -> Self {
         Self { identity }
     }
 
-    pub fn generate_key(&self, use_time: SystemTime, tag: &[u8]) -> anyhow::Result<Vec<u8>> {
+    pub fn next(&self, use_time: SystemTime, tag: &[u8]) -> anyhow::Result<Vec<u8>> {
         let unix_time = use_time.duration_since(UNIX_EPOCH)?.as_secs();
 
         const TIME_SIZE: usize = size_of::<u64>();
         let data_length: usize = tag.len().min(32);
 
-        let mut buffer = BytesMut::with_capacity(TIME_SIZE + data_length);
+        let mut buffer = BytesMut::new();
+        buffer.resize(TIME_SIZE + data_length, 0);
+
         (&mut buffer[0..TIME_SIZE]).write_u64::<BigEndian>(unix_time)?;
 
         let written = (&mut buffer[TIME_SIZE..]).write(tag)?;
@@ -100,21 +102,73 @@ impl Confirm {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
-    use chrono::{TimeZone, Utc};
+    use chrono::{DateTime, TimeZone, Utc};
+
+    fn mock_totp() -> Auth {
+        const SECRET: &str = "cnOgv/KdpLoP6Nbh0GMkXkPXALQ=";
+        let secret_bytes = BASE64_STANDARD.decode(SECRET).unwrap();
+        Auth::new(secret_bytes.into())
+    }
+
+    fn mock_identity() -> MobileConf {
+        const IDENTITY: &str = "cnOgv/KdpLoP6Nbh0GMkXkPXALQ=";
+        let identity_bytes = BASE64_STANDARD.decode(IDENTITY).unwrap();
+        MobileConf::new(identity_bytes.into())
+    }
+
+    fn mock_datetime() -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(2025, 1, 1, 12, 30, 15).earliest().unwrap()
+    }
 
     #[test]
     fn generates_valid_auth_code() {
-        const SECRET: &str = "cnOgv/KdpLoP6Nbh0GMkXkPXALQ=";
-        let secret_bytes = BASE64_STANDARD.decode(SECRET).unwrap();
-        let state = State::new(secret_bytes.into());
+        let totp = mock_totp();
 
         let time = Utc.with_ymd_and_hms(2025, 1, 1, 12, 30, 15).earliest().unwrap();
-        let code = state.next(time.into()).unwrap();
+        let code = totp.next(time.into()).unwrap();
 
         assert_eq!(code, "JQNVX")
+    }
+
+    #[test]
+    fn generates_valid_confirmation_keys() {
+        let identity = mock_identity();
+        let time = mock_datetime();
+
+        let tag_result_pairs = vec![
+            ("conf", "qpt+vhKD/ujXR1TzQHoLHB/YiBM="),
+            ("", "q/rk93BVLk5dJ7fjrUpn9RmYmg0="),
+            ("abcdfghiabcdfghiabcdfghiabcdfghi", "QDI10zPUHxnb8kl0z5z8Xwy41AQ="),
+        ];
+
+        for (tag, expected) in tag_result_pairs {
+            let code = identity.next(time.into(), tag.as_bytes()).unwrap();
+            let code = BASE64_STANDARD.encode(code);
+
+            assert_eq!(code, expected, "expected {}, got {}, for tag {}", expected, code, tag);
+        }
+    }
+
+    #[test]
+    fn conf_keys_are_truncated() {
+        let identity = mock_identity();
+        let time = mock_datetime();
+
+        let tag_result_pairs = vec![
+            ("abcdfghiabcdfghiabcdfghiabcdfghi", "QDI10zPUHxnb8kl0z5z8Xwy41AQ="),
+            ("abcdfghiabcdfghiabcdfghiabcdfghia", "QDI10zPUHxnb8kl0z5z8Xwy41AQ="),
+            ("abcdfghiabcdfghiabcdfghiabcdfghiab", "QDI10zPUHxnb8kl0z5z8Xwy41AQ="),
+        ];
+
+        for (tag, expected) in tag_result_pairs {
+            let code = identity.next(time.into(), tag.as_bytes()).unwrap();
+            let code = BASE64_STANDARD.encode(code);
+
+            assert_eq!(code, expected, "expected {}, got {}, for tag {}", expected, code, tag);
+        }
     }
 }
