@@ -75,27 +75,19 @@ pub struct PublicRequest<I: Encode, O: Decode> {
 #[derive(Error, Debug)]
 pub enum SendError {
     #[error(transparent)]
-    Url(#[from] url::ParseError),
-
-    #[error(transparent)]
+    /// There was an error when executing the HTTP request.
     Reqwest(#[from] reqwest_middleware::Error),
 
     #[error(transparent)]
+    /// The response's status code was not in the acceptable success range.
     Status(#[from] steamlang::EnsureStatusError),
 
     #[error(transparent)]
+    /// The response's E-Result was not [`steamlang::EResult::Ok`].
     SteamEResult(#[from] steamlang::EnsureResultError),
 
     #[error(transparent)]
-    Prost(#[from] prost::DecodeError),
-
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-
-    #[error(transparent)]
-    Utf8(#[from] Utf8Error),
-
-    #[error(transparent)]
+    /// Error decoding the response of the request into the response type
     Decode(#[from] anyhow::Error),
 }
 
@@ -127,10 +119,6 @@ impl PublicTransport {
     pub async fn send<I: Encode, O: Decode>(&self, request: PublicRequest<I, O>) -> Result<O, SendError> {
         let mut url = request.base_url.clone();
         url.set_path(request.path.as_str());
-
-        // for (param, value) in &request.params {
-        //     url.query_pairs_mut().append_pair(param, value);
-        // }
 
         if request.requires_api_key {
             url.query_pairs_mut().append_pair("key", &self.api_key);
@@ -224,6 +212,11 @@ impl PrivateTransport {
         })
     }
 
+    /// Sends a private Steam web request. Supports both GET and POST requests.
+    ///
+    /// ## Errors
+    ///
+    /// See [SendError].
     pub async fn send<I: Encode, O: Decode>(&self, request: PrivateRequest<I, O>) -> Result<O, SendError> {
         let mut url = request.base_url.clone();
         url.set_path(&request.path);
