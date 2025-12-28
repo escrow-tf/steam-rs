@@ -4,6 +4,7 @@ use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{BufMut, Bytes, BytesMut};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
+use std::fmt::{Debug, Display};
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -38,7 +39,7 @@ impl Auth {
         }
 
         // extract 4 bytes at start and drop first bit
-        let fc32 = (&hashcode[start..start + 4]).read_u32::<BigEndian>()?;
+        let fc32 = hashcode.get(start..start + 4).unwrap().read_u32::<BigEndian>()?;
         let fc32 = (fc32 & ((1 << 31) - 1)) as usize;
 
         // range of possible chars for steam auth code.
@@ -60,11 +61,11 @@ impl Auth {
          */
         let chars = CODE_CHARS.as_bytes();
         let utf8 = vec![
-            chars[fc32 % CODE_CHARS.len()],
-            chars[(fc32 / 26) % CODE_CHARS.len()],
-            chars[(fc32 / 676) % CODE_CHARS.len()],
-            chars[(fc32 / 17576) % CODE_CHARS.len()],
-            chars[(fc32 / 456976) % CODE_CHARS.len()],
+            *chars.get(fc32 % CODE_CHARS.len()).unwrap(),
+            *chars.get((fc32 / 26) % CODE_CHARS.len()).unwrap(),
+            *chars.get((fc32 / 676) % CODE_CHARS.len()).unwrap(),
+            *chars.get((fc32 / 17576) % CODE_CHARS.len()).unwrap(),
+            *chars.get((fc32 / 456976) % CODE_CHARS.len()).unwrap(),
         ];
 
         Ok(String::from_utf8(utf8)?)
@@ -98,9 +99,11 @@ impl ConfirmationKey {
     pub fn as_slice(&self) -> &[u8] {
         &self.bytes
     }
+}
 
-    pub fn to_string(&self) -> String {
-        BASE64_STANDARD.encode(&self.bytes)
+impl Display for ConfirmationKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(BASE64_STANDARD.encode(&self.bytes).as_str())
     }
 }
 
