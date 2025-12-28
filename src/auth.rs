@@ -5,7 +5,11 @@ use serde::Deserialize;
 use steam_encode::Decode;
 use type_state_builder::TypeStateBuilder;
 
-use crate::{steamid::SteamID, steamproto::{CAuthenticationGetPasswordRsaPublicKeyRequest, CAuthenticationGetPasswordRsaPublicKeyResponse}, transport::{PrivateRequest, WEB_API_BASE_URL}};
+use crate::{
+    steamid::SteamID,
+    steamproto::{CAuthenticationGetPasswordRsaPublicKeyRequest, CAuthenticationGetPasswordRsaPublicKeyResponse},
+    transport::{PrivateRequest, WEB_API_BASE_URL},
+};
 
 #[derive(Debug, Deserialize)]
 pub struct Claims {
@@ -36,11 +40,13 @@ impl Decode for RsaKeyResponse {
         let bytes = response.bytes().await?;
         let result: CAuthenticationGetPasswordRsaPublicKeyResponse = Message::decode(bytes)?;
 
-        let key_modulus = result.publickey_mod()
+        let key_modulus = result
+            .publickey_mod()
             .parse::<BigUint>()
             .map_err(|err| anyhow!("error parsing the public key's modulus: {err}"))?;
 
-        let key_exponent = result.publickey_exp()
+        let key_exponent = result
+            .publickey_exp()
             .parse::<BigUint>()
             .map_err(|err| anyhow!("error parsing the public key's exponent: {err}"))?;
 
