@@ -22,7 +22,10 @@ fn main() -> Result<()> {
     config.default_package_filename(steamproto_package_name);
 
     for path in serializable_messages {
-        config.type_attribute(path, "#[derive(::steam_encode_derive::Encode, ::steam_encode_derive::Decode)]");
+        config.type_attribute(
+            path,
+            "#[derive(::steam_encode_derive::Encode, ::steam_encode_derive::Decode)]",
+        );
         config.type_attribute(path, "#[encode(proto)]");
         config.type_attribute(path, "#[decode(proto)]");
     }
