@@ -14,7 +14,12 @@ fn main() -> Result<()> {
         "enums.proto",
     ];
 
-    let serializable_messages: [&str; 2] = [".CTwoFactor_Time_Request", ".CTwoFactor_Time_Response"];
+    let serializable_messages = [
+        ".CTwoFactor_Time_Request",
+        ".CTwoFactor_Time_Response",
+        ".CAuthentication_GetPasswordRSAPublicKey_Request",
+        ".CAuthentication_GetPasswordRSAPublicKey_Response",
+    ];
     let serializable_enums: [&str; 0] = [];
 
     let mut config = Config::new();
