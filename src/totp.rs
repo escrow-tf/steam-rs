@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use base64::prelude::*;
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use bytes::{Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use hmac::{Hmac, Mac};
 use sha1::Sha1;
 use std::io::Write;
@@ -104,6 +104,13 @@ impl ConfirmationKey {
     }
 }
 
+fn truncate_str(s: &str, count: usize) -> &str {
+    match s.char_indices().nth(count) {
+        None => s,
+        Some((idx, _)) => &s[..idx],
+    }
+}
+
 impl MobileConf {
     pub fn new(identity: Bytes) -> Self {
         Self { identity }
@@ -129,20 +136,23 @@ impl MobileConf {
         let unix_time = use_time.duration_since(UNIX_EPOCH)?.as_secs();
 
         const TIME_SIZE: usize = size_of::<u64>();
-        let data_length: usize = tag.len().min(32);
+        let tag = truncate_str(tag, 32);
+        let data_length = tag.len();
 
         let mut buffer = BytesMut::new();
-        buffer.resize(TIME_SIZE + data_length, 0);
+        buffer.reserve(TIME_SIZE + data_length);
 
-        (&mut buffer[0..TIME_SIZE]).write_u64::<BigEndian>(unix_time)?;
+        let mut buffer = buffer.writer();
+        buffer.write_u64::<BigEndian>(unix_time)?;
 
-        let written = (&mut buffer[TIME_SIZE..]).write(tag.as_bytes())?;
+        let written = buffer.write(tag.as_bytes())?;
         if written != data_length {
             return Err(anyhow!("failed to write entire tag to key buffer"));
         }
 
         let mut mac = HmacSha1::new_from_slice(&self.identity[..])?;
-        mac.update(&buffer);
+        mac.update(buffer.get_ref());
+
         Ok(ConfirmationKey {
             unix_time: unix_time,
             tag: tag.to_string(),
