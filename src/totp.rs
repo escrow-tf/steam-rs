@@ -11,15 +11,34 @@ use std::time::{SystemTime, UNIX_EPOCH};
 type HmacSha1 = Hmac<Sha1>;
 
 pub struct Auth {
-    shared_secret: Bytes,
+    mac: HmacSha1,
 }
 
 impl Auth {
-    pub fn new(shared_secret: Bytes) -> Self {
-        Self { shared_secret }
+    /// Construct a new [`Auth`] given some shared secret, usually extracted from an authenticator's maFile.
+    ///
+    /// # Errors
+    ///
+    /// Errors if the shared secret is invalid
+    pub fn new(shared_secret: &Bytes) -> anyhow::Result<Self> {
+        let mac = HmacSha1::new_from_slice(&shared_secret[..])?;
+        Ok(Self { mac })
     }
 
+    /// Generates a new 5-character mobile auth code.
+    ///
+    /// # Errors
+    ///
+    /// Errors if hash fails to generate a valid state.
+    ///
+    /// # Panics
+    ///
+    /// Shouldn't ever panic.
     pub fn next(&self, time: SystemTime) -> anyhow::Result<String> {
+        // range of possible chars for steam auth code.
+        //noinspection SpellCheckingInspection
+        const CODE_CHARS: &str = "23456789BCDFGHJKMNPQRTVWXY";
+
         let time = time.duration_since(UNIX_EPOCH)?.as_secs();
         let time = time / 30;
 
@@ -27,24 +46,19 @@ impl Auth {
         time_buffer.write_u64::<BigEndian>(time)?;
 
         // Evaluate hash code for `tb` by key
-        let mut mac = HmacSha1::new_from_slice(&self.shared_secret[..])?;
+        let mut mac = self.mac.clone();
         mac.update(time_buffer.as_slice());
         let hashcode = mac.finalize().into_bytes();
 
         // last 4 bytes provide initial position. hashcode should have a length of 20.
         let start = (hashcode.get(19).ok_or(anyhow!("invalid sha1 hmac digest from time"))? & 0xf) as usize;
 
-        if start >= 16 {
-            return Err(anyhow!(""));
-        }
-
         // extract 4 bytes at start and drop first bit
-        let fc32 = hashcode.get(start..start + 4).unwrap().read_u32::<BigEndian>()?;
+        let mut fc32 = hashcode
+            .get(start..start + 4)
+            .ok_or(anyhow!("invalid sha1 hmac or fullcode start range"))?;
+        let fc32 = fc32.read_u32::<BigEndian>()?;
         let fc32 = (fc32 & ((1 << 31) - 1)) as usize;
-
-        // range of possible chars for steam auth code.
-        //noinspection SpellCheckingInspection
-        const CODE_CHARS: &str = "23456789BCDFGHJKMNPQRTVWXY";
 
         /*
         the code generation process looks like this:
@@ -64,8 +78,8 @@ impl Auth {
             *chars.get(fc32 % CODE_CHARS.len()).unwrap(),
             *chars.get((fc32 / 26) % CODE_CHARS.len()).unwrap(),
             *chars.get((fc32 / 676) % CODE_CHARS.len()).unwrap(),
-            *chars.get((fc32 / 17576) % CODE_CHARS.len()).unwrap(),
-            *chars.get((fc32 / 456976) % CODE_CHARS.len()).unwrap(),
+            *chars.get((fc32 / 17_576) % CODE_CHARS.len()).unwrap(),
+            *chars.get((fc32 / 456_976) % CODE_CHARS.len()).unwrap(),
         ];
 
         Ok(String::from_utf8(utf8)?)
@@ -84,18 +98,22 @@ pub struct ConfirmationKey {
 }
 
 impl ConfirmationKey {
+    #[must_use]
     pub fn unix_time(&self) -> u64 {
         self.unix_time
     }
 
+    #[must_use]
     pub fn tag(&self) -> &str {
         &self.tag
     }
 
+    #[must_use]
     pub fn tag_owned(&self) -> String {
         self.tag.clone()
     }
 
+    #[must_use]
     pub fn as_slice(&self) -> &[u8] {
         &self.bytes
     }
@@ -119,26 +137,38 @@ impl MobileConf {
         Self { identity }
     }
 
+    /// # Errors
+    ///
+    /// Errors if writing out the key fails in any way.
     pub fn next_getlist(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
         self.next(use_time, "getlist")
     }
 
+    /// # Errors
+    ///
+    /// Errors if writing out the key fails in any way.
     pub fn next_details(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
         self.next(use_time, "details")
     }
 
+    /// # Errors
+    ///
+    /// Errors if writing out the key fails in any way.
     pub fn next_accept(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
         self.next(use_time, "accept")
     }
 
+    /// # Errors
+    ///
+    /// Errors if writing out the key fails in any way.
     pub fn next_rject(&self, use_time: SystemTime) -> anyhow::Result<ConfirmationKey> {
         self.next(use_time, "rject")
     }
 
     fn next(&self, use_time: SystemTime, tag: &str) -> anyhow::Result<ConfirmationKey> {
+        const TIME_SIZE: usize = size_of::<u64>();
         let unix_time = use_time.duration_since(UNIX_EPOCH)?.as_secs();
 
-        const TIME_SIZE: usize = size_of::<u64>();
         let tag = truncate_str(tag, 32);
         let data_length = tag.len();
 
@@ -173,8 +203,8 @@ mod tests {
 
     fn mock_totp() -> Auth {
         const SECRET: &str = "cnOgv/KdpLoP6Nbh0GMkXkPXALQ=";
-        let secret_bytes = BASE64_STANDARD.decode(SECRET).unwrap();
-        Auth::new(secret_bytes.into())
+        let secret_bytes: Bytes = BASE64_STANDARD.decode(SECRET).unwrap().into();
+        Auth::new(&secret_bytes).unwrap()
     }
 
     fn mock_identity() -> MobileConf {
@@ -194,7 +224,7 @@ mod tests {
         let time = Utc.with_ymd_and_hms(2025, 1, 1, 12, 30, 15).earliest().unwrap();
         let code = totp.next(time.into()).unwrap();
 
-        assert_eq!(code, "JQNVX")
+        assert_eq!(code, "JQNVX");
     }
 
     #[test]
@@ -212,7 +242,7 @@ mod tests {
             let code = identity.next(time.into(), tag).unwrap();
             let code = code.to_string();
 
-            assert_eq!(code, expected, "expected {}, got {}, for tag {}", expected, code, tag);
+            assert_eq!(code, expected, "expected {expected}, got {code}, for tag {tag}");
         }
     }
 
@@ -231,7 +261,7 @@ mod tests {
             let code = identity.next(time.into(), tag).unwrap();
             let code = code.to_string();
 
-            assert_eq!(code, expected, "expected {}, got {}, for tag {}", expected, code, tag);
+            assert_eq!(code, expected, "expected {expected}, got {code}, for tag {tag}");
         }
     }
 }

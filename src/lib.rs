@@ -21,6 +21,7 @@
 
 #![feature(assert_matches)]
 #![feature(duration_constructors)]
+#![warn(clippy::pedantic)]
 
 /// Authenticate with the Steam network.
 pub mod auth;
@@ -28,13 +29,13 @@ pub mod auth;
 /// Query community profiles, like player inventories.
 pub mod community;
 
-/// Query the IEconService for trade offers.
+/// Query steam's `IEconService` for trade offers.
 pub mod econ;
 
 /// Query, accept, or decline mobile confirmations.
 pub mod mobile;
 
-/// Utilities or parsing valid 64-bit SteamIDs.
+/// Utilities or parsing valid 64-bit Steam IDs.
 pub mod steamid;
 
 /// Various helpers and constants for evaluating Steam responses.
@@ -52,10 +53,11 @@ pub mod tradeoffer;
 /// Send requests created by the other modules in this crate.
 pub mod transport;
 
-/// Query Steam for information about two factor authentication.
+/// Query Steam for information about twofactor authentication.
 pub mod twofactor;
 
 /// Rendered Steam network protobufs.
 pub mod steamproto {
+    #![allow(clippy::pedantic)]
     include!(concat!(env!("OUT_DIR"), "/steamproto.rs"));
 }

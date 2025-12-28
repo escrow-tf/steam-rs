@@ -23,7 +23,7 @@ use std::{collections::HashMap, marker::PhantomData, str::FromStr, sync::Arc};
 use reqwest::{
     Client, Method, Url,
     cookie::Jar,
-    header::{ACCEPT, HeaderMap, USER_AGENT},
+    header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT},
 };
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
@@ -35,6 +35,9 @@ use crate::steamlang;
 
 pub const WEB_API_BASE_URL: &str = "https://api.steampowered.com";
 pub const COMMUNITY_BASE_URL: &str = "https://www.steamcommunity.com";
+
+const ACCEPT_VALUE: HeaderValue = HeaderValue::from_static("application/json, text/plain, */*");
+const USER_AGENT_VALUE: HeaderValue = HeaderValue::from_static("okhttp/4.9.2");
 
 #[derive(Clone)]
 /// Handles requests to Steam's Public Web API.
@@ -110,7 +113,7 @@ impl PublicTransport {
     ///
     /// ## Errors
     ///
-    /// See [SendError].
+    /// See [`SendError`].
     pub async fn send<I: Encode, O: Decode>(&self, request: PublicRequest<I, O>) -> Result<O, SendError> {
         let mut url = request.base_url.clone();
         url.set_path(request.path.as_str());
@@ -126,8 +129,8 @@ impl PublicTransport {
         };
 
         let mut headers = HeaderMap::new();
-        headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
-        headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
+        headers.insert(ACCEPT, ACCEPT_VALUE);
+        headers.insert(USER_AGENT, USER_AGENT_VALUE);
 
         let http_request = http_client.request(Method::GET, url).headers(headers);
 
@@ -143,7 +146,7 @@ impl PublicTransport {
 
 #[derive(Debug, Clone)]
 pub struct PrivateTransport {
-    jar: Arc<Jar>,
+    _jar: Arc<Jar>,
     client: ClientWithMiddleware,
     retry_client: ClientWithMiddleware,
 }
@@ -201,7 +204,7 @@ impl PrivateTransport {
             .build();
 
         Ok(Self {
-            jar,
+            _jar: jar,
             client: ClientWithMiddleware::from(client),
             retry_client,
         })
@@ -211,7 +214,7 @@ impl PrivateTransport {
     ///
     /// ## Errors
     ///
-    /// See [SendError].
+    /// See [`SendError`].
     pub async fn send<I: Encode, O: Decode>(&self, request: PrivateRequest<I, O>) -> Result<O, SendError> {
         let mut url = request.base_url.clone();
         url.set_path(&request.path);
@@ -227,8 +230,8 @@ impl PrivateTransport {
         };
 
         let mut headers = request.headers.clone();
-        headers.insert(ACCEPT, "application/json, text/plain, */*".parse().unwrap());
-        headers.insert(USER_AGENT, "okhttp/4.9.2".parse().unwrap());
+        headers.insert(ACCEPT, ACCEPT_VALUE);
+        headers.insert(USER_AGENT, USER_AGENT_VALUE);
 
         let http_request = http_client.request(request.method, url).headers(headers);
         let http_request = request.data.encode(http_request);

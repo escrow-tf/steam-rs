@@ -35,7 +35,7 @@ pub enum Type {
 }
 
 #[derive(Debug, Eq, PartialEq, TryFromPrimitive, Copy, Clone)]
-#[repr(u16)]
+#[repr(u32)]
 pub enum Instance {
     All = 0,
     Desktop = 1,
@@ -43,9 +43,9 @@ pub enum Instance {
     Web = 3,
 }
 
-const ID_MASK: u64 = 0xFFFFFFFF;
-const INSTANCE_MASK: u64 = 0x000FFFFF;
-const TYPE_MASK: u64 = 0x0000000F;
+const ID_MASK: u64 = 0xFFFF_FFFF;
+const INSTANCE_MASK: u64 = 0x000F_FFFF;
+const TYPE_MASK: u64 = 0x0000_000F;
 
 #[derive(Error, Debug)]
 pub enum ParseSteamIDError {
@@ -74,7 +74,7 @@ pub enum ConvertSteamIDError {
     InstanceOutOfRange(#[from] TryFromPrimitiveError<Instance>),
 }
 
-/// A valid 64-bit Steam ID. There are several invariants, see [ParseSteamIDError].
+/// A valid 64-bit Steam ID. There are several invariants, see [`ParseSteamIDError`].
 ///
 /// Parse from a string:
 ///
@@ -115,7 +115,7 @@ impl From<SteamID> for u64 {
         let universe = (val.universe as u64) << 56;
         let id_type = (val.id_type as u64) << 52;
         let instance = (val.instance as u64) << 32;
-        let account_id = val.account_id as u64;
+        let account_id = u64::from(val.account_id);
 
         universe | id_type | instance | account_id
     }
@@ -125,7 +125,7 @@ impl TryFrom<u64> for SteamID {
     type Error = ConvertSteamIDError;
     fn try_from(id: u64) -> Result<Self, Self::Error> {
         let account_id = (id & ID_MASK) as u32;
-        let instance = Instance::try_from(((id >> 32) & INSTANCE_MASK) as u16)?;
+        let instance = Instance::try_from(((id >> 32) & INSTANCE_MASK) as u32)?;
         let id_type = Type::try_from(((id >> 52) & TYPE_MASK) as u8)?;
         let universe = Universe::try_from((id >> 56) as u8)?;
 
@@ -148,7 +148,7 @@ impl TryFrom<u64> for SteamID {
 
 struct SteamIDVisitor;
 
-impl<'de> Visitor<'de> for SteamIDVisitor {
+impl Visitor<'_> for SteamIDVisitor {
     type Value = SteamID;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -160,7 +160,7 @@ impl<'de> Visitor<'de> for SteamIDVisitor {
         E: serde::de::Error,
     {
         v.parse::<SteamID>()
-            .map_err(|err| E::custom(format!("error parsing SteamID from value: {}", err)))
+            .map_err(|err| E::custom(format!("error parsing SteamID from value: {err}")))
     }
 }
 
@@ -191,18 +191,18 @@ pub enum ConvertPlayerSteamIDError {
     TypeIsNotIndividual,
 }
 
-/// [PlayerSteamID] is like a [SteamID], but it has the following additional invariants:
-/// - the [Universe] is always Public
-/// - the [Type] is always Individual
+/// [`PlayerSteamID`] is like a [`SteamID`], but it has the following additional invariants:
+/// - the [`Universe`] is always Public
+/// - the [`Type`] is always Individual
 ///
-/// [SteamID] to [PlayerSteamID] with [TryFrom] or [TryInto]:
+/// [`SteamID`] to [`PlayerSteamID`] with [`TryFrom`] or [`TryInto`]:
 ///
 /// ```rs
 /// let steam_id = "76561197960287930".parse::<SteamID>()?;
 /// let player_steam_id = PlayerSteamID::try_from(steam_id)?;
 /// ```
 ///
-/// Convert back to [SteamID] with [From] or [Into]:
+/// Convert back to [`SteamID`] with [`From`] or [`Into`]:
 ///
 /// ```rs
 /// let steam_id = SteamID::from(player_steam_id.into());
@@ -227,7 +227,7 @@ impl TryFrom<SteamID> for PlayerSteamID {
 
 struct PlayerSteamIDVisitor;
 
-impl<'de> Visitor<'de> for PlayerSteamIDVisitor {
+impl Visitor<'_> for PlayerSteamIDVisitor {
     type Value = PlayerSteamID;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -240,10 +240,10 @@ impl<'de> Visitor<'de> for PlayerSteamIDVisitor {
     {
         let steam_id = v
             .parse::<SteamID>()
-            .map_err(|err| E::custom(format!("error parsing SteamID from value: {}", err)))?;
+            .map_err(|err| E::custom(format!("error parsing SteamID from value: {err}")))?;
 
         PlayerSteamID::try_from(steam_id)
-            .map_err(|err| E::custom(format!("error creating PlayerSteamID from SteamID: {}", err)))
+            .map_err(|err| E::custom(format!("error creating PlayerSteamID from SteamID: {err}")))
     }
 }
 
@@ -272,6 +272,15 @@ mod tests {
 
     #[test]
     fn test_steamid_invariants() {
+        fn form_id(universe: u8, id_type: u16, instance: u8, account_id: u32) -> u64 {
+            let universe = u64::from(universe) << 56;
+            let id_type = u64::from(id_type) << 52;
+            let instance = u64::from(instance) << 32;
+            let account_id = u64::from(account_id);
+
+            universe | id_type | instance | account_id
+        }
+
         // testing invariants:
         // - valid 64-bit integer
         // - valid universe, instance, type, and account id
@@ -309,19 +318,20 @@ mod tests {
 
         let valid_id = form_id(Universe::Public as u8, Type::Individual as u16, Instance::Web as u8, 1);
         assert_matches!(SteamID::try_from(valid_id), Ok(_));
-
-        fn form_id(universe: u8, id_type: u16, instance: u8, account_id: u32) -> u64 {
-            let universe = (universe as u64) << 56;
-            let id_type = (id_type as u64) << 52;
-            let instance = (instance as u64) << 32;
-            let account_id = account_id as u64;
-
-            universe | id_type | instance | account_id
-        }
     }
 
     #[test]
+    #[allow(clippy::unreadable_literal)]
     fn test_player_steamid_invariants() {
+        fn form_id(universe: u8, id_type: u16, instance: u8, account_id: u32) -> SteamID {
+            let universe = u64::from(universe) << 56;
+            let id_type = u64::from(id_type) << 52;
+            let instance = u64::from(instance) << 32;
+            let account_id = u64::from(account_id);
+
+            (universe | id_type | instance | account_id).try_into().unwrap()
+        }
+
         // testing invariants:
         // - universe must be Public
         // - type must be Individual
@@ -331,6 +341,7 @@ mod tests {
 
         let player_steam_id = PlayerSteamID::try_from(steam_id).unwrap();
         let steam_id = SteamID::from(player_steam_id);
+
         assert_eq!(u64::from(steam_id), 76561197960287930);
 
         let invalid_id = form_id(Universe::Beta as u8, Type::Individual as u16, Instance::Web as u8, 1);
@@ -344,14 +355,5 @@ mod tests {
             PlayerSteamID::try_from(invalid_id),
             Err(ConvertPlayerSteamIDError::TypeIsNotIndividual)
         );
-
-        fn form_id(universe: u8, id_type: u16, instance: u8, account_id: u32) -> SteamID {
-            let universe = (universe as u64) << 56;
-            let id_type = (id_type as u64) << 52;
-            let instance = (instance as u64) << 32;
-            let account_id = account_id as u64;
-
-            (universe | id_type | instance | account_id).try_into().unwrap()
-        }
     }
 }

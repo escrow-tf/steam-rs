@@ -10,6 +10,7 @@ use crate::{
 pub struct QueryTimeRequest;
 
 impl QueryTimeRequest {
+    #[must_use]
     pub fn new() -> Self {
         Self
     }

@@ -141,6 +141,11 @@ pub enum EResult {
 #[error("got non-2xx status code: {0:?}")]
 pub struct EnsureStatusError(StatusCode);
 
+/// Validates a steam response.
+///
+/// # Errors
+///
+/// Errors if the response's status is not 2xx.
 pub fn ensure_success(response: &Response) -> Result<(), EnsureStatusError> {
     if response.status().as_u16() < 200 || response.status().as_u16() >= 300 {
         Err(response.status().into())
@@ -164,6 +169,11 @@ pub enum EnsureResultError {
     InvalidEResult(TryFromPrimitiveError<EResult>),
 }
 
+/// Validates the [`EResult`] in the steam response.
+///
+/// # Errors
+///
+/// Errors if the result is not [`EResult::Ok`].
 pub fn ensure_eresult(response: &Response) -> Result<(), EnsureResultError> {
     let headers = response.headers();
     if headers.contains_key("X-Eresult") {

@@ -132,7 +132,7 @@ impl From<PlayerInventoryRequest> for PrivateRequest<PlayerInventoryRequest, Pla
 
         PrivateRequest::builder()
             .method(Method::GET)
-            .path(format!("/inventory/{}/{}/{}", app_id, steam_id, context_id))
+            .path(format!("/inventory/{app_id}/{steam_id}/{context_id}"))
             .can_retry(true)
             .data(request)
             .build()

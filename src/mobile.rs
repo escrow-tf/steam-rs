@@ -201,7 +201,10 @@ impl From<AcceptRequest> for PrivateRequest<AjaxRequest, AcceptResponse> {
             steam_id: request.steam_id,
             key: request.confirmation_key.to_string(),
             time: request.confirmation_key.unix_time(),
-            tag: request.confirmation_key.tag_owned(),
+            tag: {
+                let this = &request.confirmation_key;
+                this.tag_owned()
+            },
             react: "react".to_string(),
             operation: "allow".to_string(),
             confirmation_id: request.id,
@@ -255,7 +258,10 @@ impl From<DeclineRequest> for PrivateRequest<AjaxRequest, AcceptResponse> {
             steam_id: request.steam_id,
             key: request.confirmation_key.to_string(),
             time: request.confirmation_key.unix_time(),
-            tag: request.confirmation_key.tag_owned(),
+            tag: {
+                let this = &request.confirmation_key;
+                this.tag_owned()
+            },
             react: "react".to_string(),
             operation: "cancel".to_string(),
             confirmation_id: request.id,
