@@ -18,12 +18,7 @@ the transport handles requests over HTTP. There are three kinds of transports:
     - most responses use protobuf bodies
 */
 
-use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{collections::HashMap, marker::PhantomData, str::FromStr, sync::Arc};
 
 use reqwest::{
     Client, Method, Url,
@@ -32,8 +27,8 @@ use reqwest::{
 };
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
-use thiserror::Error;
 use steam_encode::{Decode, Encode};
+use thiserror::Error;
 use type_state_builder::TypeStateBuilder;
 
 use crate::steamlang;
