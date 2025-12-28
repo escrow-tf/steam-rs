@@ -154,7 +154,7 @@ impl MobileConf {
         mac.update(buffer.get_ref());
 
         Ok(ConfirmationKey {
-            unix_time: unix_time,
+            unix_time,
             tag: tag.to_string(),
             bytes: Box::from(mac.finalize().into_bytes().as_slice()),
         })
